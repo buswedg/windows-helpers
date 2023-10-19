@@ -1,0 +1,18 @@
+{
+  "Apps": [
+    "Microsoft.WindowsCalculator",
+    "Microsoft.WindowsCamera",
+    "Microsoft.Clipchamp",
+    "Microsoft.WindowsAlarms",
+    "Microsoft.BingWeather",
+    "Microsoft.ZuneMusic",
+    "Microsoft.BingNews",
+    "Microsoft.Todos",
+    "Microsoft.ZuneVideo",
+    "Microsoft.MicrosoftStickyNotes",
+    "Microsoft.MicrosoftSolitaireCollection",
+    "SpotifyAB.SpotifyMusic",
+    "Microsoft.Microsoft3DViewer",
+    "Microsoft.WindowsFeedbackHub"
+  ]
+}

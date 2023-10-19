@@ -1,0 +1,9 @@
+{
+   "Apps": [
+      "7zip.7zip"
+   ],
+   "FilesToClean": [
+      "*.lnk",
+      "desktop.ini"
+   ]
+}

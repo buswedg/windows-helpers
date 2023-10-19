@@ -1,0 +1,26 @@
+{
+   "Apps": [
+      "7zip.7zip",
+      "Amazon.Games",
+      "CodecGuide.K-LiteCodecPack.Basic",
+      "Discord.Discord",
+      "ElectronicArts.EADesktop",
+      "EpicGames.EpicGamesLauncher",
+      "Jellyfin.JellyfinMediaPlayer",
+      "Malwarebytes.Malwarebytes",
+      "MullvadVPN.MullvadVPN",
+      "Notepad++.Notepad++",
+      "OBSProject.OBSStudio",
+      "Oracle.JavaRuntimeEnvironment",
+      "Playnite.Playnite",
+      "PuTTY.PuTTY",
+      "Python.Python.3.11",
+      "Ubisoft.Connect",
+      "Valve.Steam",
+      "VideoLAN.VLC"
+   ],
+   "FilesToClean": [
+      "*.lnk",
+      "desktop.ini"
+   ]
+}
