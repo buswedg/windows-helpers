@@ -6,6 +6,7 @@
       "Discord.Discord",
       "ElectronicArts.EADesktop",
       "EpicGames.EpicGamesLauncher",
+	  "GOG.Galaxy",
       "Jellyfin.JellyfinMediaPlayer",
       "Malwarebytes.Malwarebytes",
       "MullvadVPN.MullvadVPN",
@@ -15,6 +16,7 @@
       "Playnite.Playnite",
       "PuTTY.PuTTY",
       "Python.Python.3.11",
+	  "SteelSeries.GG",
       "Ubisoft.Connect",
       "Valve.Steam",
       "VideoLAN.VLC"

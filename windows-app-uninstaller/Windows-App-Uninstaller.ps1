@@ -52,7 +52,7 @@ $JsonData = Get-Content $JsonFilePath -Raw | ConvertFrom-Json
 
 Write-Host "Uninstalling Applications..." -ForegroundColor Green
 Foreach ($App in $JsonData.Apps) {
-    $appPackage = Get-AppxPackage -Name $App -ErrorAction SilentlyContinue
+    $appPackage = Get-AppxPackage -Name $App -AllUsers -ErrorAction SilentlyContinue
     if ($appPackage -ne $null) {
         Write-Host ("Uninstalling {0}..." -f $App) -ForegroundColor Yellow
         $appPackage | Remove-AppxPackage -Confirm:$false

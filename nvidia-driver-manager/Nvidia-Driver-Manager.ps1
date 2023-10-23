@@ -187,21 +187,21 @@ function DownloadDriver {
 
 function InstallDriver {
     param (
-        [string]$ArchiverProgram,
+        [string]$ArchiverPath,
         [string]$DownloadFilePath,
         [string]$ExtractFolderPath
     )
 
     Write-Host "Extracting files now..."
 
-    if ((Test-Path $ArchiverProgram) -eq $false) {
+    if ((Test-Path $ArchiverPath) -eq $false) {
         Write-Host "Something went wrong. No archive program detected. This should not happen."
         exit
     }
     
     $FilesToExtract = "Display.Driver HDAudio NVI2 PhysX EULA.txt ListDevices.txt setup.cfg setup.exe"
 
-    Start-Process -FilePath $ArchiverProgram -NoNewWindow -ArgumentList "x -bso0 -bsp1 -bse1 -aoa $DownloadFilePath $FilesToExtract -o""$ExtractFolderPath""" -Wait
+    Start-Process -FilePath $ArchiverPath -NoNewWindow -ArgumentList "x -bso0 -bsp1 -bse1 -aoa $DownloadFilePath $FilesToExtract -o""$ExtractFolderPath""" -Wait
 
     (Get-Content "$ExtractFolderPath\setup.cfg") | Where-Object { $_ -notmatch 'name="\${{(EulaHtmlFile|FunctionalConsentFile|PrivacyPolicyFile)}}' } | Set-Content "$ExtractFolderPath\setup.cfg" -Encoding UTF8 -Force
 
@@ -215,12 +215,12 @@ function InstallDriver {
 
 function Get-7ZipArchiver {
     if ((Test-Path HKLM:\SOFTWARE\7-Zip\) -eq $true) {
-        $SevenZipPath = Get-ItemProperty -Path HKLM:\SOFTWARE\7-Zip\ -Name Path
-        $SevenZipPath = $SevenZipPath.Path
-        $SevenZipPathExe = Join-Path $SevenZipPath "7z.exe"
+        $7zPath = Get-ItemProperty -Path HKLM:\SOFTWARE\7-Zip\ -Name Path
+        $7zPath = $7zPath.Path
+        $7zPathExe = Join-Path $7zPath "7z.exe"
 
-        if ((Test-Path $SevenZipPathExe) -eq $true) {
-            $ArchiverProgram = $SevenZipPathExe
+        if ((Test-Path $7zPathExe) -eq $true) {
+            $7zPath = $7zPathExe
         }
     }
     else {
@@ -231,7 +231,7 @@ function Get-7ZipArchiver {
         exit
     }
 
-    return $ArchiverProgram
+    return $7zPath
 }
 
 if ($Mode -eq 'download-only' -or $Mode -eq 'download-install') {
@@ -260,10 +260,10 @@ if ($Mode -eq 'download-only' -or $Mode -eq 'download-install') {
 
 if ($Mode -eq 'install-only' -or $Mode -eq 'download-install') {
     $SelectedFile = Get-DriverFileForInstallation -Folder $Folder
-    $ArchiverProgram = Get-7ZipArchiver
+    $ArchiverPath = Get-7ZipArchiver
     $ExtractFolderPath = Join-Path $Folder $( [System.IO.Path]::GetFileNameWithoutExtension($SelectedFile) )
     $DownloadFilePath = Join-Path $Folder $SelectedFile
-    InstallDriver -ArchiverProgram $ArchiverProgram -DownloadFilePath $DownloadFilePath -ExtractFolderPath $ExtractFolderPath
+    InstallDriver -ArchiverPath "$ArchiverPath" -DownloadFilePath $DownloadFilePath -ExtractFolderPath $ExtractFolderPath
     Write-Host -ForegroundColor Green "Driver installed. You may need to reboot to finish installation."
 }
 
