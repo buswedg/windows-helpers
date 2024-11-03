@@ -1,0 +1,22 @@
+{
+  "gpus": [
+    {
+      "tag": "4090_notebook_w11",
+      "machinetype": "notebook",
+      "winversion": "win10-win11",
+      "winarchitecture": "64bit",
+      "psid": "129",
+      "pfid": "1004",
+      "osid": "135"
+    },
+    {
+      "tag": "4080_notebook_w11",
+      "machinetype": "notebook",
+      "winversion": "win10-win11",
+      "winarchitecture": "64bit",
+      "psid": "129",
+      "pfid": "1005",
+      "osid": "135"
+    }
+  ]
+}
