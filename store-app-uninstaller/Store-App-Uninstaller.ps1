@@ -9,10 +9,10 @@ This script reads a JSON file containing a list of application package names, an
 Name of the JSON file (from the 'configs' directory) that contains the list of apps to uninstall.
 
 .OUTPUTS
-Console output and log file saved to %TEMP%\windows-app-uninstaller.log.
+Console output and log file saved to %TEMP%\store-app-uninstaller.log.
 
 .EXAMPLE
-PS> .\Windows-App-Uninstaller.ps1 -Json "test.json"
+PS> .\Store-App-Uninstaller.ps1 -Json "test.json"
 Uninstalls all applications listed in test.json.
 
 .LINK
@@ -61,7 +61,7 @@ function Get-ConfigData {
     return Get-Content $ConfigFile -Raw | ConvertFrom-Json
 }
 
-$LogPath = Join-Path $env:TEMP "windows-app-uninstaller.log"
+$LogPath = Join-Path $env:TEMP "store-app-uninstaller.log"
 Start-Transcript -Path $LogPath
 
 $ConfigData = Get-ConfigData

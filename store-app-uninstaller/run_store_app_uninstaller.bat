@@ -1,6 +1,6 @@
 @echo off
 
-set "SCRIPT_PATH=%~dp0Windows-App-Uninstaller.ps1"
+set "SCRIPT_PATH=%~dp0Store-App-Uninstaller.ps1"
 
 net session >nul 2>&1
 if %errorLevel% neq 0 (

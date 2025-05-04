@@ -1,4 +1,4 @@
-# Windows-App-Uninstaller
+# Store-App-Uninstaller
 
 Uninstalls Windows Store applications using PowerShell.
 
@@ -7,7 +7,7 @@ Uninstalls Windows Store applications using PowerShell.
 
 1. Create a new 'config.json' file in the configs folder, with the applications you'd like to uninstall.
 
-2. Simply run 'run_windows_app_uninstaller.bat' and reference the filename (with extension) of the config file you created above.
+2. Simply run 'run_store_app_uninstaller.bat' and reference the filename (with extension) of the config file you created above.
 
 
 ## Note
