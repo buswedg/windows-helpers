@@ -80,6 +80,12 @@ if (-not (Get-Command "winget.exe" -ErrorAction SilentlyContinue)) {
 
 $ConfigData = Get-ConfigData
 
+if (-not $ConfigData.Apps -or $ConfigData.Apps.Count -eq 0) {
+    Write-Host "No apps found in config file." -ForegroundColor Yellow
+    Stop-Transcript
+    exit 0
+}
+
 # Install apps
 Write-Host "`nInstalling applications (skipping if already present)..." -ForegroundColor Green
 
@@ -99,7 +105,7 @@ foreach ($App in $ConfigData.Apps) {
 
 # Cleanup files
 if ($ConfigData.FilesToClean) {
-    Write-Host "`nCleaning specified files from desktops..." -ForegroundColor Green
+    Write-Host "`nCleaning specified files from desktop..." -ForegroundColor Green
     $PublicDesktop = "C:\Users\Public\Desktop"
     $UserDesktop = [Environment]::GetFolderPath("Desktop")
     $CutoffTime = (Get-Date).AddHours(-1)

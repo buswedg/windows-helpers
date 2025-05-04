@@ -1,7 +1,7 @@
 {
    "Apps": [
       "7zip.7zip",
-      "GIMP.GIMP",
+      "GIMP.GIMP.2",
       "VideoLAN.VLC"
    ],
    "FilesToClean": [

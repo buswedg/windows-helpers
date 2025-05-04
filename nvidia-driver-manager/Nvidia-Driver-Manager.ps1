@@ -74,19 +74,19 @@ function Get-ConfigFilePath {
 }
 
 function Get-DesiredGpuType {
-    param ([string]$ConfigFilePath)
+    param ([string]$ConfigPath)
 
-    $GpuInfo = Get-Content $ConfigFilePath -Raw | ConvertFrom-Json
+    $Config = Get-Content $ConfigPath -Raw | ConvertFrom-Json
     Write-Host "`nAvailable GPU types:" -ForegroundColor Cyan
-    for ($i = 0; $i -lt $GpuInfo.Gpus.Count; $i++) {
-        Write-Host "$($i + 1). $($GpuInfo.Gpus[$i].tag)"
+    for ($i = 0; $i -lt $Config.Gpus.Count; $i++) {
+        Write-Host "$($i + 1). $($Config.Gpus[$i].tag)"
     }
 
     do {
-        $Idx = Read-Host "Enter the number for the GPU type to use"
-    } while (-not ($Idx -match '^\d+$') -or [int]$Idx -lt 1 -or [int]$Idx -gt $GpuInfo.Gpus.Count)
+        $Idx = Read-Host "Enter the number of the GPU type to use"
+    } while (-not ($Idx -match '^\d+$') -or [int]$Idx -lt 1 -or [int]$Idx -gt $Config.Gpus.Count)
 
-    return $GpuInfo.Gpus[[int]$Idx - 1]
+    return $Config.Gpus[[int]$Idx - 1]
 }
 
 function Get-InstalledDriverVersion {
@@ -117,18 +117,20 @@ function Get-LatestDriverVersion {
            "&numberOfResults=1"
 
     $Resp = Invoke-WebRequest -Uri $Uri -UseBasicParsing
+
     return ($Resp.Content | ConvertFrom-Json).IDS[0].downloadInfo.Version
 }
 
 function Get-7ZipArchiver {
-    $Path = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\7-Zip' -Name Path -ErrorAction SilentlyContinue).Path
-    $Exe = Join-Path $Path "7z.exe"
-    if (-not (Test-Path $Exe)) {
+    $7zPath = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\7-Zip' -Name Path -ErrorAction SilentlyContinue).Path
+    $7zExe = Join-Path $7zPath "7z.exe"
+    if (-not (Test-Path $7zExe)) {
         Write-Host "7-Zip not found. Please install it before continuing." -ForegroundColor Red
         pause
         exit
     }
-    return $Exe
+
+    return $7zExe
 }
 
 function DownloadDriver {
@@ -191,7 +193,7 @@ Start-Transcript -Path $LogPath
 if ($Mode -in @('download-only', 'download-install')) {
     $ConfigPath = Get-ConfigFilePath
 
-    $Gpu = Get-DesiredGpuType -ConfigFilePath $ConfigPath
+    $Gpu = Get-DesiredGpuType -ConfigPath $ConfigPath
     $Latest = Get-LatestDriverVersion -Psid $Gpu.Psid -Pfid $Gpu.Pfid -Osid $Gpu.Osid
     $Installed = Get-InstalledDriverVersion
 
@@ -212,8 +214,8 @@ if ($Mode -in @('download-only', 'download-install')) {
 if ($Mode -in @('install-only', 'download-install')) {
     $DriverFile = Get-DriverFileName -DriverDir $Folder
     $ExtractPath = Join-Path $Folder ([System.IO.Path]::GetFileNameWithoutExtension($DriverFile))
-    $7z = Get-7ZipArchiver
-    InstallDriver -7zExe $7z -DriverExe (Join-Path $Folder $DriverFile) -ExtractPath $ExtractPath
+    $7zExe = Get-7ZipArchiver
+    InstallDriver -7zExe $7zExe -DriverExe (Join-Path $Folder $DriverFile) -ExtractPath $ExtractPath
 }
 
 Stop-Transcript
