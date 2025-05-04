@@ -1,68 +1,95 @@
 <#
 .SYNOPSIS
-
-Uninstalls applications using PowerShell.
+Uninstalls Windows Store applications using PowerShell.
 
 .DESCRIPTION
-
-Uninstalls all applications in the specified JSON file using Powershell.
+This script reads a JSON file containing a list of application package names, and uninstalls each matching app for all users.
 
 .PARAMETER Json
-Name of the JSON file (without path) containing uninstallation information.
+Name of the JSON file (from the 'configs' directory) that contains the list of apps to uninstall.
 
 .OUTPUTS
-
-Screen output and TransAction log which is available in %Temp%\windows-app-uninstaller.log.
+Console output and log file saved to %TEMP%\windows-app-uninstaller.log.
 
 .EXAMPLE
-
 PS> .\Windows-App-Uninstaller.ps1 -Json "test.json"
-Uninstalls all applications in test.json.
+Uninstalls all applications listed in test.json.
 
 .LINK
-
 None
-
 #>
 
-# Parameters
-[CmdletBinding(DefaultParameterSetName = "All")]
+[CmdletBinding()]
 param (
-    [Parameter(Mandatory = $true, HelpMessage = "Name of the JSON file (without path) containing uninstallation information")]
     [string]$Json
 )
 
 #Requires -RunAsAdministrator
 
-Start-Transcript -Path $ENV:TEMP\windows-app-uninstaller.log
+function Get-ConfigData {
+    $configDir = Join-Path $PSScriptRoot "configs"
+    if (-not (Test-Path $configDir)) {
+        Write-Host "Config directory not found: $configDir" -ForegroundColor Red
+        exit 1
+    }
 
-Set-ExecutionPolicy Bypass -Force:$True -Confirm:$false -ErrorAction SilentlyContinue
-Set-Variable -Name 'ConfirmPreference' -Value 'None' -Scope Global
+    if ($Json) {
+        $path = Join-Path $configDir $Json
+        if (-not (Test-Path $path)) {
+            Write-Host "Specified JSON config file does not exist: $path" -ForegroundColor Red
+            exit 1
+        }
+        return Get-Content $path -Raw | ConvertFrom-Json
+    }
 
-$ProgressPreference = 'SilentlyContinue'
+    $jsonFiles = Get-ChildItem -Path $configDir -Filter *.json
+    if ($jsonFiles.Count -eq 0) {
+        Write-Host "No JSON config files found in '$configDir'." -ForegroundColor Red
+        exit 1
+    }
 
-$JsonFilePath = Join-Path $PSScriptRoot "configs\$Json"
+    Write-Host "`nAvailable JSON config files:`n" -ForegroundColor Green
+    for ($i = 0; $i -lt $jsonFiles.Count; $i++) {
+        Write-Host "$($i + 1): $($jsonFiles[$i].Name)"
+    }
 
-if (-not (Test-Path $JsonFilePath)) {
-    Write-Host "The specified JSON file does not exist: $JsonFilePath" -ForegroundColor Red
-    exit 1
+    do {
+        $selection = Read-Host "`nEnter the number of the JSON config file to use"
+    } while (-not ($selection -match '^\d+$') -or [int]$selection -lt 1 -or [int]$selection -gt $jsonFiles.Count)
+
+    $selectedFile = $jsonFiles[[int]$selection - 1].FullName
+    return Get-Content $selectedFile -Raw | ConvertFrom-Json
 }
 
-$JsonData = Get-Content $JsonFilePath -Raw | ConvertFrom-Json
+$LogPath = Join-Path $env:TEMP "windows-app-uninstaller.log"
+Start-Transcript -Path $LogPath
 
-Write-Host "Uninstalling Applications..." -ForegroundColor Green
-Foreach ($App in $JsonData.Apps) {
-    $appPackage = Get-AppxPackage -Name $App -AllUsers -ErrorAction SilentlyContinue
-    if ($appPackage -ne $null) {
-        Write-Host ("Uninstalling {0}..." -f $App) -ForegroundColor Yellow
-        $appPackage | Remove-AppxPackage -Confirm:$false
+$ConfigData = Get-ConfigData
+
+if (-not $ConfigData.Apps -or $ConfigData.Apps.Count -eq 0) {
+    Write-Host "No apps found in config file." -ForegroundColor Yellow
+    Stop-Transcript
+    exit 0
+}
+
+Write-Host "`nUninstalling Applications..." -ForegroundColor Green
+
+foreach ($app in $ConfigData.Apps) {
+    $package = Get-AppxPackage -Name $app -AllUsers -ErrorAction SilentlyContinue
+    if ($package) {
+        Write-Host "Uninstalling $app..." -ForegroundColor Yellow
+        try {
+            $package | Remove-AppxPackage -Confirm:$false
+        } catch {
+            Write-Host ("Failed to uninstall {0}: {1}" -f $app, $_.Exception.Message) -ForegroundColor Red
+        }
     } else {
-        Write-Host ("{0} is not installed." -f $App) -ForegroundColor Cyan
+        Write-Host "$app is not installed." -ForegroundColor Cyan
     }
 }
 
 Stop-Transcript
-
-Write-Host "All operations completed."
-Write-Host "Exiting script in 5 seconds."; Start-Sleep -Seconds 5
+Write-Host "`nAll operations completed. Log saved to: $LogPath"
+Write-Host "`nExiting in 5 seconds..."
+Start-Sleep -Seconds 5
 exit
