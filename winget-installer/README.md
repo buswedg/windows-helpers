@@ -1,6 +1,6 @@
 # Winget-Installer
 
-Simple Powershell script to bulk install winget packages.
+Installs applications using WinGet and PowerShell.
 
 
 ## Usage

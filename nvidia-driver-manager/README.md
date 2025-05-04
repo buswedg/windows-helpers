@@ -1,6 +1,6 @@
 # NVIDIA-Driver-Manager
 
-Downloads and/or installs essential Nvidia display drivers (excluding GeForce and Shadowplay components) using Powershell and 7zip.
+Downloads and/or installs essential Nvidia display drivers using PowerShell and 7-Zip.
 
 
 ## Usage

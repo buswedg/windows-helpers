@@ -27,38 +27,38 @@ param (
 #Requires -RunAsAdministrator
 
 function Get-ConfigData {
-    $configDir = Join-Path $PSScriptRoot "configs"
-    if (-not (Test-Path $configDir)) {
-        Write-Host "Config directory not found: $configDir" -ForegroundColor Red
+    $ConfigDir = Join-Path $PSScriptRoot "configs"
+    if (-not (Test-Path $ConfigDir)) {
+        Write-Host "Config directory not found: $ConfigDir" -ForegroundColor Red
         exit 1
     }
 
     if ($Json) {
-        $path = Join-Path $configDir $Json
-        if (-not (Test-Path $path)) {
-            Write-Host "Specified JSON config file does not exist: $path" -ForegroundColor Red
+        $ConfigPath = Join-Path $ConfigDir $Json
+        if (-not (Test-Path $ConfigPath)) {
+            Write-Host "Specified JSON config file does not exist: $ConfigPath" -ForegroundColor Red
             exit 1
         }
-        return Get-Content $path -Raw | ConvertFrom-Json
+        return Get-Content $ConfigPath -Raw | ConvertFrom-Json
     }
 
-    $jsonFiles = Get-ChildItem -Path $configDir -Filter *.json
-    if ($jsonFiles.Count -eq 0) {
-        Write-Host "No JSON config files found in '$configDir'." -ForegroundColor Red
+    $ConfigFiles = Get-ChildItem -Path $ConfigDir -Filter *.json
+    if ($ConfigFiles.Count -eq 0) {
+        Write-Host "No JSON config files found in '$ConfigDir'." -ForegroundColor Red
         exit 1
     }
 
     Write-Host "`nAvailable JSON config files:`n" -ForegroundColor Green
-    for ($i = 0; $i -lt $jsonFiles.Count; $i++) {
-        Write-Host "$($i + 1): $($jsonFiles[$i].Name)"
+    for ($i = 0; $i -lt $ConfigFiles.Count; $i++) {
+        Write-Host "$($i + 1): $($ConfigFiles[$i].Name)"
     }
 
     do {
-        $selection = Read-Host "`nEnter the number of the JSON config file to use"
-    } while (-not ($selection -match '^\d+$') -or [int]$selection -lt 1 -or [int]$selection -gt $jsonFiles.Count)
+        $Selection = Read-Host "`nEnter the number of the JSON config file to use"
+    } while (-not ($Selection -match '^\d+$') -or [int]$Selection -lt 1 -or [int]$Selection -gt $ConfigFiles.Count)
 
-    $selectedFile = $jsonFiles[[int]$selection - 1].FullName
-    return Get-Content $selectedFile -Raw | ConvertFrom-Json
+    $ConfigFile = $ConfigFiles[[int]$Selection - 1].FullName
+    return Get-Content $ConfigFile -Raw | ConvertFrom-Json
 }
 
 $LogPath = Join-Path $env:TEMP "windows-app-uninstaller.log"
@@ -74,22 +74,21 @@ if (-not $ConfigData.Apps -or $ConfigData.Apps.Count -eq 0) {
 
 Write-Host "`nUninstalling Applications..." -ForegroundColor Green
 
-foreach ($app in $ConfigData.Apps) {
-    $package = Get-AppxPackage -Name $app -AllUsers -ErrorAction SilentlyContinue
-    if ($package) {
-        Write-Host "Uninstalling $app..." -ForegroundColor Yellow
+foreach ($App in $ConfigData.Apps) {
+    $Package = Get-AppxPackage -Name $App -AllUsers -ErrorAction SilentlyContinue
+    if ($Package) {
+        Write-Host "Uninstalling $App..." -ForegroundColor Yellow
         try {
-            $package | Remove-AppxPackage -Confirm:$false
+            $Package | Remove-AppxPackage -Confirm:$false
         } catch {
-            Write-Host ("Failed to uninstall {0}: {1}" -f $app, $_.Exception.Message) -ForegroundColor Red
+            Write-Host ("Failed to uninstall {0}: {1}" -f $App, $_.Exception.Message) -ForegroundColor Red
         }
     } else {
-        Write-Host "$app is not installed." -ForegroundColor Cyan
+        Write-Host "$App is not installed." -ForegroundColor Cyan
     }
 }
 
 Stop-Transcript
-Write-Host "`nAll operations completed. Log saved to: $LogPath"
-Write-Host "`nExiting in 5 seconds..."
+Write-Host "`nAll operations completed. Exiting in 5 seconds..."
 Start-Sleep -Seconds 5
 exit

@@ -1,6 +1,6 @@
 @echo off
 
-set "SCRIPT_PATH=%~dp0Windows-App-Installer.ps1"
+set "SCRIPT_PATH=%~dp0App-Downloader-Installer.ps1"
 
 net session >nul 2>&1
 if %errorLevel% neq 0 (
