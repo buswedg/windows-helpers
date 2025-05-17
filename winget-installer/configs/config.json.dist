@@ -1,0 +1,11 @@
+{
+   "Apps": [
+      "7zip.7zip",
+      "GIMP.GIMP.2",
+      "VideoLAN.VLC"
+   ],
+   "FilesToClean": [
+      "*.lnk",
+      "desktop.ini"
+   ]
+}
