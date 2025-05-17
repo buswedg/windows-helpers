@@ -17,5 +17,5 @@ exit /b
 
 :main
 set "SCRIPT_PATH=%~dp0Network-Adapter-Manager.ps1"
-powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_PATH%" -mode disable
+powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_PATH%"
 pause

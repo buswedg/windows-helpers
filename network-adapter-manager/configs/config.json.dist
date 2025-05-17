@@ -1,6 +1,22 @@
 {
   "Adapters": [
-    "Ethernet 1",
-    "Wi-Fi"
+    {
+      "Name": "Ethernet 1",
+      "Enabled": false
+    },
+    {
+      "Name": "Ethernet 2",
+      "Enabled": true,
+      "Mode": "static",
+      "IPAddress": "192.168.1.10",
+      "PrefixLength": 24,
+      "Gateway": "192.168.1.254",
+      "DNS": [ "192.168.1.254" ]
+    },
+    {
+      "Name": "Wi-Fi",
+      "Enabled": true,
+      "Mode": "dhcp"
+    }
   ]
 }

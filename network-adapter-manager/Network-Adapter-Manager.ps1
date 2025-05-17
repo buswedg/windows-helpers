@@ -1,49 +1,37 @@
 <#
 .SYNOPSIS
-Enables or disables a configurable list of network adapters using Powershell.
+Configures a list of network adapters using Powershell.
 
 .DESCRIPTION
-This script reads a JSON file containing a list of network adapter names, then enables or disables them based on the specified Mode parameter.
+This script reads a JSON file containing a set of network adapter configurations, then applies those settings to each adapter.
 
 .PARAMETER Json
-Name of the JSON file (from the 'configs' directory) that contains the list of adapter names.
-
-.PARAMETER Mode
-Action to perform on all adapters: 'enable' or 'disable'.
+Name of the JSON file (from the 'configs' directory) that contains the set of adapter configurations.
 
 .OUTPUTS
 Console output and a log file saved to %TEMP%\network-adapter-manager.log.
 
 .EXAMPLE
-PS> .\Network-Adapter-Manager.ps1 -Json "adapters.json" -Mode "Enable"
+PS> .\Network-Adapter-Manager.ps1 -Json "test.json"
 #>
 
 [CmdletBinding()]
 param (
-    [Parameter(Mandatory = $true)]
-    [string]$Json,
-
-    [Parameter(Mandatory = $true)]
-    [ValidateSet("Enable", "Disable")]
-    [string]$Mode
+    [string]$Json
 )
 
 #Requires -RunAsAdministrator
 
-function Get-ConfigData
-{
+function Get-ConfigData {
     $ConfigDir = Join-Path $PSScriptRoot "configs"
-    if (-not (Test-Path $ConfigDir))
-    {
+    if (-not (Test-Path $ConfigDir)) {
         Write-Host "Config directory not found: $ConfigDir" -ForegroundColor Red
         exit 1
     }
 
-    if ($Json)
-    {
+    if ($Json) {
         $ConfigPath = Join-Path $ConfigDir $Json
-        if (-not (Test-Path $ConfigPath))
-        {
+        if (-not (Test-Path $ConfigPath)) {
             Write-Host "Specified JSON config file does not exist: $ConfigPath" -ForegroundColor Red
             exit 1
         }
@@ -51,8 +39,7 @@ function Get-ConfigData
     }
 
     $ConfigFiles = Get-ChildItem -Path $ConfigDir -Filter *.json
-    if ($ConfigFiles.Count -eq 0)
-    {
+    if ($ConfigFiles.Count -eq 0) {
         Write-Host "No JSON config files found in '$ConfigDir'." -ForegroundColor Red
         exit 1
     }
@@ -62,8 +49,7 @@ function Get-ConfigData
         Write-Host "$( $i + 1 ): $( $ConfigFiles[$i].Name )"
     }
 
-    do
-    {
+    do {
         $Selection = Read-Host "`nEnter the number of the JSON config file to use"
     } while (-not ($Selection -match '^\d+$') -or [int]$Selection -lt 1 -or [int]$Selection -gt $ConfigFiles.Count)
 
@@ -76,38 +62,66 @@ Start-Transcript -Path $LogPath
 
 $ConfigData = Get-ConfigData
 
-if (-not $ConfigData.Adapters -or $ConfigData.Adapters.Count -eq 0)
-{
+if (-not $ConfigData.Adapters -or $ConfigData.Adapters.Count -eq 0) {
     Write-Host "No adapters found in config file." -ForegroundColor Yellow
     Stop-Transcript
     exit 0
 }
 
-foreach ($Adapter in $ConfigData.Adapters)
-{
-    if (-not $Adapter)
-    {
-        Write-Host "Invalid entry: adapter name is empty." -ForegroundColor Red
-        continue
-    }
+foreach ($Adapter in $ConfigData.Adapters) {
+    try {
+        $name = $Adapter.Name
 
-    try
-    {
-        switch ( $Mode.ToLower() )
-        {
-            "enable" {
-                Write-Host "Enabling adapter: $Adapter" -ForegroundColor Cyan
-                Enable-NetAdapter -Name $Adapter -Confirm:$false -ErrorAction Stop
-            }
-            "disable" {
-                Write-Host "Disabling adapter: $Adapter" -ForegroundColor Yellow
-                Disable-NetAdapter -Name $Adapter -Confirm:$false -ErrorAction Stop
+        if ($Adapter.Enabled -eq $false) {
+            Write-Host "Disabling adapter: $name" -ForegroundColor Yellow
+            Disable-NetAdapter -Name $name -Confirm:$false -ErrorAction Stop
+            continue
+        }
+
+        Write-Host "Enabling adapter: $name" -ForegroundColor Cyan
+        Enable-NetAdapter -Name $name -Confirm:$false -ErrorAction Stop
+
+        if ($Adapter.Mode -eq 'dhcp') {
+            Write-Host "Setting adapter '$name' to DHCP"
+            Set-NetIPInterface -InterfaceAlias $name -Dhcp Enabled -ErrorAction Stop
+            Set-DnsClientServerAddress -InterfaceAlias $name -ResetServerAddresses -ErrorAction Stop
+        }
+        elseif ($Adapter.Mode -eq 'static') {
+            Write-Host "Assigning static IP to '$name': $($Adapter.IPAddress)/$($Adapter.PrefixLength)"
+
+            # Remove all existing IPv4 addresses
+            Get-NetIPAddress -InterfaceAlias $name -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+                ForEach-Object {
+                    Write-Host "Removing existing IP: $($_.IPAddress)" -ForegroundColor DarkGray
+                    Remove-NetIPAddress -InterfaceAlias $name -IPAddress $_.IPAddress -Confirm:$false -ErrorAction SilentlyContinue
+                }
+
+            # Remove any default gateway routes on this interface
+            Get-NetRoute -InterfaceAlias $name -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue |
+                ForEach-Object {
+                    Write-Host "Removing existing default gateway: $($_.NextHop)" -ForegroundColor DarkGray
+                    Remove-NetRoute -InterfaceAlias $name -DestinationPrefix $_.DestinationPrefix -Confirm:$false -ErrorAction SilentlyContinue
+                }
+
+            # Assign static IP
+            New-NetIPAddress -InterfaceAlias $name `
+                             -IPAddress $Adapter.IPAddress `
+                             -PrefixLength $Adapter.PrefixLength `
+                             -DefaultGateway $Adapter.Gateway `
+                             -ErrorAction Stop
+
+            # Set DNS servers if defined
+            if ($Adapter.DNS) {
+                Write-Host "Setting DNS for '$name': $($Adapter.DNS -join ', ')"
+                Set-DnsClientServerAddress -InterfaceAlias $name -ServerAddresses $Adapter.DNS -ErrorAction Stop
             }
         }
-    }
-    catch
-    {
-        Write-Host ("Failed to $Mode '$Adapter': {0}" -f $_.Exception.Message) -ForegroundColor Red
+        else {
+            Write-Host "Unknown mode for adapter '$name': $($Adapter.Mode)" -ForegroundColor Red
+        }
+
+    } catch {
+        Write-Host "Error processing '$($Adapter.Name)': $($_.Exception.Message)" -ForegroundColor Red
     }
 }
 
