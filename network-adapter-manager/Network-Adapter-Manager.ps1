@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Configures a list of network adapters using Powershell.
+Configure a set of network adapters using Powershell.
 
 .DESCRIPTION
 This script reads a JSON file containing a set of network adapter configurations, then applies those settings to each adapter.

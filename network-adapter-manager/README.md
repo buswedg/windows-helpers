@@ -1,6 +1,6 @@
-# Store-App-Uninstaller
+# Network-Adapter-Manager
 
-Configures a list of network adapters using Powershell.
+Configure a set of network adapters using Powershell.
 
 ## Usage
 
