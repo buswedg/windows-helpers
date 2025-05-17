@@ -13,10 +13,6 @@ Console output and log file saved to %TEMP%\store-app-uninstaller.log.
 
 .EXAMPLE
 PS> .\Store-App-Uninstaller.ps1 -Json "test.json"
-Uninstalls all applications listed in test.json.
-
-.LINK
-None
 #>
 
 [CmdletBinding()]

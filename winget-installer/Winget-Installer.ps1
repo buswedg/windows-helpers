@@ -14,10 +14,6 @@ Console output and log file saved to %TEMP%\winget-installer.log.
 
 .EXAMPLE
 PS> .\Winget-Installer.ps1 -Json "test.json"
-Installs all applications listed in test.json using WinGet.
-
-.LINK
-None
 #>
 
 [CmdletBinding()]

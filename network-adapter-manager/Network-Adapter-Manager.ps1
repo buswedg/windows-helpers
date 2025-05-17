@@ -78,14 +78,14 @@ $ConfigData = Get-ConfigData
 
 if (-not $ConfigData.Adapters -or $ConfigData.Adapters.Count -eq 0)
 {
-    Write-Host "No adapter names found in config file." -ForegroundColor Yellow
+    Write-Host "No adapters found in config file." -ForegroundColor Yellow
     Stop-Transcript
     exit 0
 }
 
-foreach ($Name in $ConfigData.Adapters)
+foreach ($Adapter in $ConfigData.Adapters)
 {
-    if (-not $Name)
+    if (-not $Adapter)
     {
         Write-Host "Invalid entry: adapter name is empty." -ForegroundColor Red
         continue
@@ -93,21 +93,21 @@ foreach ($Name in $ConfigData.Adapters)
 
     try
     {
-        switch ( $Mode.ToLower())
+        switch ( $Mode.ToLower() )
         {
             "enable" {
-                Write-Host "Enabling adapter: $Name" -ForegroundColor Cyan
-                Enable-NetAdapter -Name $Name -Confirm:$false -ErrorAction Stop
+                Write-Host "Enabling adapter: $Adapter" -ForegroundColor Cyan
+                Enable-NetAdapter -Name $Adapter -Confirm:$false -ErrorAction Stop
             }
             "disable" {
-                Write-Host "Disabling adapter: $Name" -ForegroundColor Yellow
-                Disable-NetAdapter -Name $Name -Confirm:$false -ErrorAction Stop
+                Write-Host "Disabling adapter: $Adapter" -ForegroundColor Yellow
+                Disable-NetAdapter -Name $Adapter -Confirm:$false -ErrorAction Stop
             }
         }
     }
     catch
     {
-        Write-Host ("Failed to $Mode '$Name': {0}" -f $_.Exception.Message) -ForegroundColor Red
+        Write-Host ("Failed to $Mode '$Adapter': {0}" -f $_.Exception.Message) -ForegroundColor Red
     }
 }
 

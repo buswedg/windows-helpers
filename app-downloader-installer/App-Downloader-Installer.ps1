@@ -19,7 +19,6 @@ Console output and log file saved to %TEMP%\windows-app-installer.log.
 
 .EXAMPLE
 PS> .\Windows-App-Installer.ps1 -Mode download-install -Json "test.json"
-Downloads and installs applications defined in test.json.
 #>
 
 [CmdletBinding(DefaultParameterSetName = "All")]
@@ -154,7 +153,6 @@ Start-Transcript -Path $LogPath
 
 $ConfigData = Get-ConfigData
 
-# Run based on mode
 switch ($Mode)
 {
     "download-only"     {

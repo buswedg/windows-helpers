@@ -21,9 +21,6 @@ Console output and log file saved to %TEMP%\nvidia-driver-manager.log.
 .EXAMPLE
 PS> .\Nvidia-Driver-Installer.ps1 -Mode download-install -Json "test.json"
 Downloads and installs the Nvidia driver for the selected GPU from the JSON file.
-
-.LINK
-None
 #>
 
 [CmdletBinding(DefaultParameterSetName = "All")]
@@ -36,7 +33,8 @@ param (
     [string]$Json
 )
 
-# Requires
+#Requires -RunAsAdministrator
+
 Import-Module BitsTransfer -ErrorAction SilentlyContinue
 
 function Get-ConfigFilePath
