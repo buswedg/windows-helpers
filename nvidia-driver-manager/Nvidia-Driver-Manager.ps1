@@ -71,7 +71,7 @@ function Get-ConfigFilePath
 
     do
     {
-        $Sel = Read-Host "`nEnter the number of the JSON config file to use"
+        $Sel = Read-Host "`\nEnter the number of the JSON config file to use"
     } while (-not ($Sel -match '^\d+$') -or [int]$Sel -lt 1 -or [int]$Sel -gt $ConfigFiles.Count)
 
     return $ConfigFiles[[int]$Sel - 1].FullName
@@ -90,7 +90,7 @@ function Get-DesiredGpuType
 
     do
     {
-        $Sel = Read-Host "Enter the number of the GPU type to use"
+        $Sel = Read-Host "`nEnter the number of the GPU type to use"
     } while (-not ($Sel -match '^\d+$') -or [int]$Sel -lt 1 -or [int]$Sel -gt $Configs.Gpus.Count)
 
     return $Configs.Gpus[[int]$Sel - 1]
@@ -109,7 +109,7 @@ function GetDesiredDriverVersion
 
     do
     {
-        $Sel = Read-Host "Enter the number of the driver version to download"
+        $Sel = Read-Host "`nEnter the number of the driver version to download"
     } while (-not ($Sel -match '^\d+$') -or [int]$Sel -lt 1 -or [int]$Sel -gt $Versions.Count)
 
     return $Versions[[int]$Sel - 1].downloadInfo.Version
@@ -202,22 +202,66 @@ function InstallDriver
 {
     param (
         $DriverExe,
-        $ExtractPath
+        $ExtractPath,
+        $ComponentsToInstall
     )
+
+    if (!$ComponentsToInstall) {
+        $ComponentsToInstall = @("Display.Driver", "HD-Audio", "Display.ControlPanel")
+    }
 
     $7zExe = Get-7ZipArchiver
 
-    Write-Host "Extracting driver..." -ForegroundColor Cyan
+    Write-Host "`nExtracting NVIDIA driver..." -ForegroundColor Cyan
     & $7zExe x -bso0 -bsp1 -bse1 -aoa $DriverExe -o"$ExtractPath" | Out-Null
 
     $CfgPath = Join-Path $ExtractPath "setup.cfg"
-    (Get-Content $CfgPath) | Where-Object { $_ -notmatch 'name="\${{(EulaHtmlFile|FunctionalConsentFile|PrivacyPolicyFile)}}' } | Set-Content $CfgPath
+    if (!(Test-Path $CfgPath)) {
+        Write-Error "setup.cfg not found. Extraction failed or invalid driver package."
+        return
+    }
+
+    $cfg = Get-Content $CfgPath -Raw -Encoding UTF8
+    $sections = @{}
+
+    foreach ($section in ($cfg -split "\r?\n(?=\[)")) {
+        if ($section -match "^\[(.+?)\]") {
+            $sectionName = $Matches[1].Trim()
+            $sections[$sectionName] = $section.Trim()
+        }
+    }
+
+    $existingPackages = @{}
+    if ($sections.ContainsKey("package_selection")) {
+        foreach ($line in ($sections["package_selection"] -split "`r?`n")) {
+            if ($line -match "^(.*?)=(.*?)$") {
+                $existingPackages[$Matches[1].Trim()] = $Matches[2].Trim()
+            }
+        }
+    }
+
+    if ($existingPackages.ContainsKey("NVPCF")) { $ComponentsToInstall += "NVPCF" }
+    if ($existingPackages.ContainsKey("PlatformComponents")) { $ComponentsToInstall += "PlatformComponents" }
+
+    $newPackageSelection = "[package_selection]`r`n"
+    $uniqueComponents = $ComponentsToInstall | Select-Object -Unique
+
+    foreach ($component in $uniqueComponents) {
+        $newPackageSelection += "$component=1`r`n"
+    }
+
+    $sections["package_selection"] = $newPackageSelection.TrimEnd()
+
+    $newCfg = ($sections.GetEnumerator() | Sort-Object Name | ForEach-Object { $_.Value }) -join "`r`n`r`n"
+    Set-Content -Path $CfgPath -Value $newCfg -Encoding UTF8
+
+    Write-Host "Modified setup.cfg successfully." -ForegroundColor Cyan
 
     Write-Host "Installing driver..." -ForegroundColor Cyan
     & "$ExtractPath\setup.exe" -passive -noreboot -noeula -nofinish -clean -s | Out-Null
 
     Remove-Item $ExtractPath -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Host "Installation complete." -ForegroundColor Green
+    Write-Host "NVIDIA driver installation complete." -ForegroundColor Green
 }
 
 function Get-DriverFileName
@@ -239,7 +283,7 @@ function Get-DriverFileName
 
     do
     {
-        $Sel = Read-Host "Select driver file to install"
+        $Sel = Read-Host "`nSelect driver file to install"
     } while (-not ($Sel -match '^\d+$') -or [int]$Sel -lt 1 -or [int]$Sel -gt $DriverFiles.Count)
 
     return $DriverFiles[[int]$Sel - 1].Name

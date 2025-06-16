@@ -1,23 +1,33 @@
 <#
 .SYNOPSIS
-Configure a set of network adapters using Powershell.
+Configure a set of network adapters using PowerShell.
 
 .DESCRIPTION
-This script reads a JSON file containing a set of network adapter configurations, then applies those settings to each adapter.
+This script can either read a JSON file containing a set of network adapter configurations and apply them, 
+or disable all network adapters if the -DisableAll switch is used.
 
 .PARAMETER Json
 Name of the JSON file (from the 'configs' directory) that contains the set of adapter configurations.
+
+.PARAMETER DisableAll
+Optional switch to disable all physical network adapters, bypassing the JSON configuration.
 
 .OUTPUTS
 Console output and a log file saved to %TEMP%\network-adapter-manager.log.
 
 .EXAMPLE
 PS> .\Network-Adapter-Manager.ps1 -Json "test.json"
+Reads 'test.json' from the 'configs' directory and applies the network adapter settings.
+
+.EXAMPLE
+PS> .\Network-Adapter-Manager.ps1 -DisableAll
+Disables all physical network adapters on the system.
 #>
 
 [CmdletBinding()]
 param (
-    [string]$Json
+    [string]$Json,
+    [switch]$DisableAll
 )
 
 #Requires -RunAsAdministrator
@@ -60,6 +70,20 @@ function Get-ConfigData {
 $LogPath = Join-Path $env:TEMP "network-adapter-manager.log"
 Start-Transcript -Path $LogPath
 
+if ($DisableAll) {
+    $Adapters = Get-NetAdapter -Physical | Where-Object { $_.Status -ne 'Disabled' }
+    foreach ($Adapter in $Adapters) {
+        try {
+            Write-Host "Disabling adapter: $($Adapter.Name)" -ForegroundColor Yellow
+            Disable-NetAdapter -Name $Adapter.Name -Confirm:$false -ErrorAction Stop
+        } catch {
+            Write-Host "Error disabling '$($Adapter.Name)': $($_.Exception.Message)" -ForegroundColor Red
+        }
+    }
+    Write-Host "`nAll adapters processed. Exiting..." -ForegroundColor Green
+    exit 0
+}
+
 $ConfigData = Get-ConfigData
 
 if (-not $ConfigData.Adapters -or $ConfigData.Adapters.Count -eq 0) {
@@ -68,60 +92,70 @@ if (-not $ConfigData.Adapters -or $ConfigData.Adapters.Count -eq 0) {
     exit 0
 }
 
-foreach ($Adapter in $ConfigData.Adapters) {
+foreach ($Config in $ConfigData.Adapters) {
     try {
-        $name = $Adapter.Name
+        $ConfigName = $Config.Name
+        $ConfigEnabled = $Config.Enabled
 
-        if ($Adapter.Enabled -eq $false) {
-            Write-Host "Disabling adapter: $name" -ForegroundColor Yellow
-            Disable-NetAdapter -Name $name -Confirm:$false -ErrorAction Stop
-            continue
-        }
+        $Adapter = Get-NetAdapter -Name $ConfigName -ErrorAction Stop
+        $AdapterEnabled = $Adapter.Status -eq 'Up'
 
-        Write-Host "Enabling adapter: $name" -ForegroundColor Cyan
-        Enable-NetAdapter -Name $name -Confirm:$false -ErrorAction Stop
-
-        if ($Adapter.Mode -eq 'dhcp') {
-            Write-Host "Setting adapter '$name' to DHCP"
-            Set-NetIPInterface -InterfaceAlias $name -Dhcp Enabled -ErrorAction Stop
-            Set-DnsClientServerAddress -InterfaceAlias $name -ResetServerAddresses -ErrorAction Stop
-        }
-        elseif ($Adapter.Mode -eq 'static') {
-            Write-Host "Assigning static IP to '$name': $($Adapter.IPAddress)/$($Adapter.PrefixLength)"
-
-            # Remove all existing IPv4 addresses
-            Get-NetIPAddress -InterfaceAlias $name -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-                ForEach-Object {
-                    Write-Host "Removing existing IP: $($_.IPAddress)" -ForegroundColor DarkGray
-                    Remove-NetIPAddress -InterfaceAlias $name -IPAddress $_.IPAddress -Confirm:$false -ErrorAction SilentlyContinue
-                }
-
-            # Remove any default gateway routes on this interface
-            Get-NetRoute -InterfaceAlias $name -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue |
-                ForEach-Object {
-                    Write-Host "Removing existing default gateway: $($_.NextHop)" -ForegroundColor DarkGray
-                    Remove-NetRoute -InterfaceAlias $name -DestinationPrefix $_.DestinationPrefix -Confirm:$false -ErrorAction SilentlyContinue
-                }
-
-            # Assign static IP
-            New-NetIPAddress -InterfaceAlias $name `
-                             -IPAddress $Adapter.IPAddress `
-                             -PrefixLength $Adapter.PrefixLength `
-                             -DefaultGateway $Adapter.Gateway `
-                             -ErrorAction Stop
-
-            # Set DNS servers if defined
-            if ($Adapter.DNS) {
-                Write-Host "Setting DNS for '$name': $($Adapter.DNS -join ', ')"
-                Set-DnsClientServerAddress -InterfaceAlias $name -ServerAddresses $Adapter.DNS -ErrorAction Stop
+        if ($ConfigEnabled -ne $AdapterEnabled) {
+            if ($ConfigEnabled) {
+                Write-Host "Enabling adapter: $ConfigName" -ForegroundColor Cyan
+                Enable-NetAdapter -Name $ConfigName -Confirm:$false -ErrorAction Stop
+            } else {
+                Write-Host "Disabling adapter: $ConfigName" -ForegroundColor Yellow
+                Disable-NetAdapter -Name $ConfigName -Confirm:$false -ErrorAction Stop
             }
+            Start-Sleep -Seconds 2
+        } else {
+            Write-Host "Adapter '$ConfigName' is already in desired state. Skipping..." -ForegroundColor DarkGray
         }
-        else {
-            Write-Host "Unknown mode for adapter '$name': $($Adapter.Mode)" -ForegroundColor Red
+
+        if ($ConfigEnabled -and $Config.Mode) {
+            if ($Config.Mode -eq 'dhcp') {
+                Write-Host "Setting adapter '$ConfigName' to DHCP"
+                Set-NetIPInterface -InterfaceAlias $ConfigName -Dhcp Enabled -ErrorAction Stop
+                Set-DnsClientServerAddress -InterfaceAlias $ConfigName -ResetServerAddresses -ErrorAction Stop
+            }
+            elseif ($Config.Mode -eq 'static') {
+                Write-Host "Assigning static IP to '$ConfigName': $($Config.IPAddress)/$($Config.PrefixLength)"
+
+                # Remove all IPv4 addresses (including DHCP leases)
+                Get-NetIPAddress -InterfaceAlias $ConfigName -AddressFamily IPv4 -ErrorAction SilentlyContinue | 
+                    Remove-NetIPAddress -Confirm:$false -ErrorAction SilentlyContinue
+
+                # Remove default gateways
+                Get-NetRoute -InterfaceAlias $ConfigName -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue | 
+                    Remove-NetRoute -Confirm:$false -ErrorAction SilentlyContinue
+
+                # Disable DHCP
+                Set-NetIPInterface -InterfaceAlias $ConfigName -Dhcp Disabled -ErrorAction SilentlyContinue
+
+                # Reset DNS client addresses
+                Set-DnsClientServerAddress -InterfaceAlias $ConfigName -ResetServerAddresses -ErrorAction SilentlyContinue
+
+                # Assign the static IP + gateway
+                New-NetIPAddress -InterfaceAlias $ConfigName `
+                                 -IPAddress $Config.IPAddress `
+                                 -PrefixLength $Config.PrefixLength `
+                                 -DefaultGateway $Config.Gateway `
+                                 -ErrorAction SilentlyContinue
+
+                # Set DNS servers if configured
+                if ($Config.DNS) {
+                    Write-Host "Setting DNS for '$ConfigName': $($Config.DNS -join ', ')"
+                    Set-DnsClientServerAddress -InterfaceAlias $ConfigName -ServerAddresses $Config.DNS -ErrorAction Stop
+                }
+            }
+            else {
+                Write-Host "Unknown mode '$($Config.Mode)' for adapter '$ConfigName'" -ForegroundColor Red
+            }
         }
 
     } catch {
-        Write-Host "Error processing '$($Adapter.Name)': $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "Error processing '$ConfigName': $($_.Exception.Message)" -ForegroundColor Red
     }
 }
 
