@@ -18,7 +18,7 @@ Name of the JSON file (located in the 'configs' folder) that defines the applica
 Console output and log file saved to %TEMP%\app-downloader-installer.log.
 
 .EXAMPLE
-PS> .\App-Downloader-Installer.ps1 -Mode download-install -Json "test.json"
+PS> .\App-Downloader-Installer.ps1 -Mode download-install -Json "config.json"
 #>
 
 [CmdletBinding(DefaultParameterSetName = "All")]

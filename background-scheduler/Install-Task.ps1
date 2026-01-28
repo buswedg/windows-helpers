@@ -3,9 +3,9 @@
 Installs the background scheduler orchestration task.
 
 .DESCRIPTION
-Registers a single scheduled task (\Custom\BackgroundScheduler-LogOnOrHourly-Run) that runs Background-Scheduler.ps1.
+Registers a single scheduled task (BackgroundScheduler-LogOnOrHourly-Run) that runs Background-Scheduler.ps1.
 The task is configured to run:
-1. Hourly (Daily repetition).
+1. Hourly (daily repetition).
 2. At User Logon (with a 30-second delay).
 
 .PARAMETER Json
@@ -15,7 +15,7 @@ Name of the JSON file (from the 'configs' directory) that defines the background
 Console output indicating success or failure of task registration.
 
 .EXAMPLE
-PS> .\Install-Task.ps1 -Json "default.json"
+PS> .\Install-Task.ps1 -Json "config.json"
 #>
 
 [CmdletBinding()]

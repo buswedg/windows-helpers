@@ -19,7 +19,7 @@ Name of the JSON file (from the 'configs' directory) that contains the GPU infor
 Console output and log file saved to %TEMP%\nvidia-driver-manager.log.
 
 .EXAMPLE
-PS> .\Nvidia-Driver-Manager.ps1 -Mode download-install -Json "test.json"
+PS> .\Nvidia-Driver-Manager.ps1 -Mode download-install -Json "config.json"
 #>
 
 [CmdletBinding(DefaultParameterSetName = "All")]

@@ -16,7 +16,7 @@ Optional switch to disable all physical network adapters, bypassing the JSON con
 Console output and a log file saved to %TEMP%\network-adapter-manager.log.
 
 .EXAMPLE
-PS> .\Network-Adapter-Manager.ps1 -Json "test.json"
+PS> .\Network-Adapter-Manager.ps1 -Json "config.json"
 #>
 
 [CmdletBinding()]

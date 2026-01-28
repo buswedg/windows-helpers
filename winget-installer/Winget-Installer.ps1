@@ -4,7 +4,6 @@ Installs a configurable list of applications using WinGet and PowerShell.
 
 .DESCRIPTION
 This script reads a JSON file that lists application IDs, and installs each application ID via WinGet.
-Automatically installs WinGet if not found. Skips applications that are already installed.
 
 .PARAMETER Json
 Name of the JSON file (from the 'configs' directory) containing application IDs and optional cleanup info.
@@ -13,7 +12,7 @@ Name of the JSON file (from the 'configs' directory) containing application IDs 
 Console output and log file saved to %TEMP%\winget-installer.log.
 
 .EXAMPLE
-PS> .\Winget-Installer.ps1 -Json "test.json"
+PS> .\Winget-Installer.ps1 -Json "config.json"
 #>
 
 [CmdletBinding()]
