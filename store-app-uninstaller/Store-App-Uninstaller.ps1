@@ -12,7 +12,7 @@ Name of the JSON file (from the 'configs' directory) that contains the list of a
 Console output and log file saved to %TEMP%\store-app-uninstaller.log.
 
 .EXAMPLE
-PS> .\Store-App-Uninstaller.ps1 -Json "test.json"
+PS> .\Store-App-Uninstaller.ps1 -Json "default.json"
 #>
 
 [CmdletBinding()]
@@ -22,7 +22,9 @@ param (
 
 #Requires -RunAsAdministrator
 
-function Get-ConfigData
+# --- Function Definitions ---
+
+function Get-ConfigPath
 {
     $ConfigDir = Join-Path $PSScriptRoot "configs"
     if (-not (Test-Path $ConfigDir))
@@ -36,10 +38,14 @@ function Get-ConfigData
         $ConfigPath = Join-Path $ConfigDir $Json
         if (-not (Test-Path $ConfigPath))
         {
+            if (Test-Path $Json)
+            {
+                return $Json
+            }
             Write-Host "Specified JSON config file does not exist: $ConfigPath" -ForegroundColor Red
             exit 1
         }
-        return Get-Content $ConfigPath -Raw | ConvertFrom-Json
+        return $ConfigPath
     }
 
     $ConfigFiles = Get-ChildItem -Path $ConfigDir -Filter *.json
@@ -50,8 +56,9 @@ function Get-ConfigData
     }
 
     Write-Host "`nAvailable JSON config files:`n" -ForegroundColor Green
-    for ($i = 0; $i -lt $ConfigFiles.Count; $i++) {
-        Write-Host "$( $i + 1 ): $( $ConfigFiles[$i].Name )"
+    for ($i = 0; $i -lt $ConfigFiles.Count; $i++)
+    {
+        Write-Host ("{0}: {1}" -f ($i + 1), $ConfigFiles[$i].Name)
     }
 
     do
@@ -59,46 +66,63 @@ function Get-ConfigData
         $Selection = Read-Host "`nEnter the number of the JSON config file to use"
     } while (-not ($Selection -match '^\d+$') -or [int]$Selection -lt 1 -or [int]$Selection -gt $ConfigFiles.Count)
 
-    $ConfigFile = $ConfigFiles[[int]$Selection - 1].FullName
-    return Get-Content $ConfigFile -Raw | ConvertFrom-Json
+    return $ConfigFiles[[int]$Selection - 1].FullName
 }
+
+# --- Main Execution ---
 
 $LogPath = Join-Path $env:TEMP "store-app-uninstaller.log"
 Start-Transcript -Path $LogPath
 
-$ConfigData = Get-ConfigData
-
-if (-not $ConfigData.Apps -or $ConfigData.Apps.Count -eq 0)
+try
 {
-    Write-Host "No apps found in config file." -ForegroundColor Yellow
+    $ConfigPath = Get-ConfigPath
+    try
+    {
+        $ConfigData = Get-Content $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    }
+    catch
+    {
+        Write-Host "Failed to parse JSON: $ConfigPath" -ForegroundColor Red
+        return
+    }
+
+    if (-not $ConfigData.Apps -or $ConfigData.Apps.Count -eq 0)
+    {
+        Write-Host "No apps found in config file." -ForegroundColor Yellow
+        return
+    }
+
+    Write-Host "`nUninstalling Applications..." -ForegroundColor Green
+
+    foreach ($App in $ConfigData.Apps)
+    {
+        $Package = Get-AppxPackage -Name $App -AllUsers -ErrorAction SilentlyContinue
+        if ($Package)
+        {
+            Write-Host "Uninstalling $App..." -ForegroundColor Yellow
+            try
+            {
+                $Package | Remove-AppxPackage -Confirm:$false
+            }
+            catch
+            {
+                Write-Host ("Failed to uninstall {0}: {1}" -f $App, $_.Exception.Message) -ForegroundColor Red
+            }
+        }
+        else
+        {
+            Write-Host "$App is not installed." -ForegroundColor Cyan
+        }
+    }
+}
+catch
+{
+    Write-Host "An unexpected error occurred: $_" -ForegroundColor Red
+}
+finally
+{
     Stop-Transcript
-    exit 0
+    Write-Host "`nAll operations completed. Exiting in 5 seconds..."
+    Start-Sleep -Seconds 5
 }
-
-Write-Host "`nUninstalling Applications..." -ForegroundColor Green
-
-foreach ($App in $ConfigData.Apps)
-{
-    $Package = Get-AppxPackage -Name $App -AllUsers -ErrorAction SilentlyContinue
-    if ($Package)
-    {
-        Write-Host "Uninstalling $App..." -ForegroundColor Yellow
-        try
-        {
-            $Package | Remove-AppxPackage -Confirm:$false
-        }
-        catch
-        {
-            Write-Host ("Failed to uninstall {0}: {1}" -f $App, $_.Exception.Message) -ForegroundColor Red
-        }
-    }
-    else
-    {
-        Write-Host "$App is not installed." -ForegroundColor Cyan
-    }
-}
-
-Stop-Transcript
-Write-Host "`nAll operations completed. Exiting in 5 seconds..."
-Start-Sleep -Seconds 5
-exit

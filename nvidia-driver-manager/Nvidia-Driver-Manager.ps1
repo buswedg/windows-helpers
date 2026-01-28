@@ -13,14 +13,13 @@ Operation mode: 'download-only', 'install-only', or 'download-install'. Default 
 Download and extraction directory. Default is $env:TEMP\NVIDIA.
 
 .PARAMETER Json
-Name of the JSON file in the 'configs' folder containing GPU information.
+Name of the JSON file (from the 'configs' directory) that contains the GPU information.
 
 .OUTPUTS
 Console output and log file saved to %TEMP%\nvidia-driver-manager.log.
 
 .EXAMPLE
-PS> .\Nvidia-Driver-Installer.ps1 -Mode download-install -Json "test.json"
-Downloads and installs the Nvidia driver for the selected GPU from the JSON file.
+PS> .\Nvidia-Driver-Manager.ps1 -Mode download-install -Json "test.json"
 #>
 
 [CmdletBinding(DefaultParameterSetName = "All")]
@@ -37,7 +36,9 @@ param (
 
 Import-Module BitsTransfer -ErrorAction SilentlyContinue
 
-function Get-ConfigFilePath
+# --- Function Definitions ---
+
+function Get-ConfigPath
 {
     $ConfigDir = Join-Path $PSScriptRoot "configs"
     if (-not (Test-Path $ConfigDir))
@@ -51,6 +52,10 @@ function Get-ConfigFilePath
         $ConfigPath = Join-Path $ConfigDir $Json
         if (-not (Test-Path $ConfigPath))
         {
+            if (Test-Path $Json)
+            {
+                return $Json
+            }
             Write-Host "Specified JSON config file does not exist: $ConfigPath" -ForegroundColor Red
             exit 1
         }
@@ -65,268 +70,142 @@ function Get-ConfigFilePath
     }
 
     Write-Host "`nAvailable JSON config files:`n" -ForegroundColor Green
-    for ($i = 0; $i -lt $ConfigFiles.Count; $i++) {
-        Write-Host "$( $i + 1 ): $( $ConfigFiles[$i].Name )"
+    for ($i = 0; $i -lt $ConfigFiles.Count; $i++)
+    {
+        Write-Host ("{0}: {1}" -f ($i + 1), $ConfigFiles[$i].Name)
     }
 
     do
     {
-        $Sel = Read-Host "`\nEnter the number of the JSON config file to use"
-    } while (-not ($Sel -match '^\d+$') -or [int]$Sel -lt 1 -or [int]$Sel -gt $ConfigFiles.Count)
+        $Selection = Read-Host "`nEnter the number of the JSON config file to use"
+    } while (-not ($Selection -match '^\d+$') -or [int]$Selection -lt 1 -or [int]$Selection -gt $ConfigFiles.Count)
 
-    return $ConfigFiles[[int]$Sel - 1].FullName
+    return $ConfigFiles[[int]$Selection - 1].FullName
 }
 
-function Get-DesiredGpuType
+function Get-SevenZipPath
 {
-    param (
-        $Configs
+    $Paths = @(
+        "${env:ProgramFiles}\7-Zip\7z.exe",
+        "${env:ProgramFiles(x86)}\7-Zip\7z.exe"
     )
 
-    Write-Host "`nAvailable GPU types:" -ForegroundColor Cyan
-    for ($i = 0; $i -lt $Configs.Gpus.Count; $i++) {
-        Write-Host "$( $i + 1 ). $( $Configs.Gpus[$i].tag )"
-    }
-
-    do
+    foreach ($Path in $Paths)
     {
-        $Sel = Read-Host "`nEnter the number of the GPU type to use"
-    } while (-not ($Sel -match '^\d+$') -or [int]$Sel -lt 1 -or [int]$Sel -gt $Configs.Gpus.Count)
-
-    return $Configs.Gpus[[int]$Sel - 1]
-}
-
-function GetDesiredDriverVersion
-{
-    param (
-        $Versions
-    )
-
-    Write-Host "`nAvailable driver versions:" -ForegroundColor Cyan
-    for ($i = 0; $i -lt $Versions.Count; $i++) {
-        Write-Host "$( $i + 1 ). Version $( $Versions[$i].downloadInfo.Version ) - Released $( $Versions[$i].downloadInfo.DownloadDate )"
-    }
-
-    do
-    {
-        $Sel = Read-Host "`nEnter the number of the driver version to download"
-    } while (-not ($Sel -match '^\d+$') -or [int]$Sel -lt 1 -or [int]$Sel -gt $Versions.Count)
-
-    return $Versions[[int]$Sel - 1].downloadInfo.Version
-}
-
-function Get-InstalledDriverVersion
-{
-    try
-    {
-        $v = (Get-CimInstance Win32_PnPSignedDriver | Where-Object { $_.Manufacturer -like "*NVIDIA*" -and $_.DeviceName -like "*NVIDIA*" } | Select-Object -First 1).DriverVersion
-        $p = $v -split '\.'
-        return "$( $p[2][-1] )$($p[3].Substring(0, 2) ).$($p[3].Substring($p[3].Length - 2, 2) )"
-    }
-    catch
-    {
-        Write-Host "Could not detect installed driver." -ForegroundColor Yellow
-        return $null
-    }
-}
-
-function Get-AvailableDriverVersions
-{
-    param (
-        $GpuType,
-        $Count = 5
-    )
-
-    $Uri = "https://gfwsl.geforce.com/services_toolkit/services/com/nvidia/services/AjaxDriverService.php" +
-            "?func=DriverManualLookup" +
-            "&psid=$( $GpuType.psid )" +
-            "&pfid=$( $GpuType.pfid )" +
-            "&osID=$( $GpuType.osid )" +
-            "&languageCode=1033" +
-            "&isWHQL=1" +
-            "&dch=1" +
-            "&sort1=0" +
-            "&numberOfResults=$Count"
-
-    $Resp = Invoke-WebRequest -Uri $Uri -UseBasicParsing
-    return ($Resp.Content | ConvertFrom-Json).IDS
-}
-
-function Get-7ZipArchiver
-{
-    $7zPath = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\7-Zip' -Name Path -ErrorAction SilentlyContinue).Path
-    $7zExe = Join-Path $7zPath "7z.exe"
-    if (-not (Test-Path $7zExe))
-    {
-        Write-Host "7-Zip not found. Please install it before continuing." -ForegroundColor Red
-        pause
-        exit
-    }
-
-    return $7zExe
-}
-
-function DownloadDriver
-{
-    param (
-        $Version,
-        $MachineType,
-        $WinVersion,
-        $Arch,
-        $Dest
-    )
-
-    $DownloadUrl = "https://international.download.nvidia.com/Windows/$Version/$Version" +
-            "-$MachineType" +
-            "-$WinVersion" +
-            "-$Arch" +
-            "-international" +
-            "-dch" +
-            "-whql.exe"
-
-    $FallbackUrl = $DownloadUrl -replace '\.exe$', '-rp.exe'
-
-    New-Item -Path $Folder -ItemType Directory -Force | Out-Null
-
-    Write-Host "Downloading driver to $Dest" -ForegroundColor Yellow
-    Start-BitsTransfer -Source $DownloadUrl -Destination $Dest -ErrorAction SilentlyContinue
-
-    if (-not $? -or -not (Test-Path $Dest))
-    {
-        Write-Host "Primary download failed. Trying fallback..." -ForegroundColor DarkYellow
-        Start-BitsTransfer -Source $FallbackUrl -Destination $Dest
-    }
-}
-
-function InstallDriver
-{
-    param (
-        $DriverExe,
-        $ExtractPath,
-        $ComponentsToInstall
-    )
-
-    if (!$ComponentsToInstall) {
-        $ComponentsToInstall = @("Display.Driver", "HD-Audio", "Display.ControlPanel")
-    }
-
-    $7zExe = Get-7ZipArchiver
-
-    Write-Host "`nExtracting NVIDIA driver..." -ForegroundColor Cyan
-    & $7zExe x -bso0 -bsp1 -bse1 -aoa $DriverExe -o"$ExtractPath" | Out-Null
-
-    $CfgPath = Join-Path $ExtractPath "setup.cfg"
-    if (!(Test-Path $CfgPath)) {
-        Write-Error "setup.cfg not found. Extraction failed or invalid driver package."
-        return
-    }
-
-    $cfg = Get-Content $CfgPath -Raw -Encoding UTF8
-    $sections = @{}
-
-    foreach ($section in ($cfg -split "\r?\n(?=\[)")) {
-        if ($section -match "^\[(.+?)\]") {
-            $sectionName = $Matches[1].Trim()
-            $sections[$sectionName] = $section.Trim()
+        if (Test-Path $Path)
+        {
+            return $Path
         }
     }
-
-    $existingPackages = @{}
-    if ($sections.ContainsKey("package_selection")) {
-        foreach ($line in ($sections["package_selection"] -split "`r?`n")) {
-            if ($line -match "^(.*?)=(.*?)$") {
-                $existingPackages[$Matches[1].Trim()] = $Matches[2].Trim()
-            }
-        }
-    }
-
-    if ($existingPackages.ContainsKey("NVPCF")) { $ComponentsToInstall += "NVPCF" }
-    if ($existingPackages.ContainsKey("PlatformComponents")) { $ComponentsToInstall += "PlatformComponents" }
-
-    $newPackageSelection = "[package_selection]`r`n"
-    $uniqueComponents = $ComponentsToInstall | Select-Object -Unique
-
-    foreach ($component in $uniqueComponents) {
-        $newPackageSelection += "$component=1`r`n"
-    }
-
-    $sections["package_selection"] = $newPackageSelection.TrimEnd()
-
-    $newCfg = ($sections.GetEnumerator() | Sort-Object Name | ForEach-Object { $_.Value }) -join "`r`n`r`n"
-    Set-Content -Path $CfgPath -Value $newCfg -Encoding UTF8
-
-    Write-Host "Modified setup.cfg successfully." -ForegroundColor Cyan
-
-    Write-Host "Installing driver..." -ForegroundColor Cyan
-    & "$ExtractPath\setup.exe" -passive -noreboot -noeula -nofinish -clean -s | Out-Null
-
-    Remove-Item $ExtractPath -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Host "NVIDIA driver installation complete." -ForegroundColor Green
+    return $null
 }
 
-function Get-DriverFileName
-{
-    param (
-        $DriverDir
-    )
+# --- Main Execution ---
 
-    $DriverFiles = Get-ChildItem -Path $DriverDir -Filter *.exe
-    if ($DriverFiles.Count -eq 1)
-    {
-        return $DriverFiles[0].Name
-    }
-
-    Write-Host "`nAvailable driver executables:" -ForegroundColor Cyan
-    for ($i = 0; $i -lt $DriverFiles.Count; $i++) {
-        Write-Host "$( $i + 1 ). $( $DriverFiles[$i].Name )"
-    }
-
-    do
-    {
-        $Sel = Read-Host "`nSelect driver file to install"
-    } while (-not ($Sel -match '^\d+$') -or [int]$Sel -lt 1 -or [int]$Sel -gt $DriverFiles.Count)
-
-    return $DriverFiles[[int]$Sel - 1].Name
-}
-
-# --- Execution ---
 $LogPath = Join-Path $env:TEMP "nvidia-driver-manager.log"
 Start-Transcript -Path $LogPath
 
-if ($Mode -in @('download-only', 'download-install'))
+try
 {
-    $ConfigPath = Get-ConfigFilePath
-    $Configs = Get-Content $ConfigPath -Raw | ConvertFrom-Json
-
-    $DesiredGpuType = Get-DesiredGpuType -Configs $Configs
-    $AvailableVersions = Get-AvailableDriverVersions -GpuType $DesiredGpuType -Count 5
-    $DesiredVersion = GetDesiredDriverVersion -Versions $AvailableVersions
-    $InstalledVersion = Get-InstalledDriverVersion
-
-    Write-Host "`nDesired version: $DesiredVersion"
-    Write-Host "Installed version: $InstalledVersion"
-
-    if ($DesiredVersion -eq $InstalledVersion)
+    $ConfigPath = Get-ConfigPath
+    try
     {
-        $Opt = Read-Host "Installed driver already matches desired version. Download anyway? (Y/N)"
-        if ($Opt -notin @('Y', 'y'))
+        $ConfigData = Get-Content $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    }
+    catch
+    {
+        Write-Host "Failed to parse JSON: $ConfigPath" -ForegroundColor Red
+        return
+    }
+
+    if ($null -eq $ConfigData.GPUs -or $ConfigData.GPUs.Count -eq 0)
+    {
+        Write-Host "No GPU definitions found in JSON." -ForegroundColor Red
+        return
+    }
+
+    # Select GPU
+    Write-Host "`nSelect GPU type to process:`n" -ForegroundColor Green
+    for ($i = 0; $i -lt $ConfigData.GPUs.Count; $i++)
+    {
+        Write-Host ("{0}: {1}" -f ($i + 1), $ConfigData.GPUs[$i].display_name)
+    }
+
+    do
+    {
+        $GpuSelection = Read-Host "`nEnter the number for the GPU type"
+    } while (-not ($GpuSelection -match '^\d+$') -or [int]$GpuSelection -lt 1 -or [int]$GpuSelection -gt $ConfigData.GPUs.Count)
+
+    $SelectedGpu = $ConfigData.GPUs[[int]$GpuSelection - 1]
+    $DownloadUrl = $SelectedGpu.download_url
+    $DriverFileName = [System.IO.Path]::GetFileName($DownloadUrl)
+    $TargetFile = Join-Path $Folder $DriverFileName
+
+    if ($Mode -match 'download')
+    {
+        if (-not (Test-Path $Folder))
         {
-            exit
+            New-Item -Path $Folder -ItemType Directory -Force | Out-Null
+        }
+
+        if (Test-Path $TargetFile)
+        {
+            Write-Host "Driver file already exists: $DriverFileName. Skipping download." -ForegroundColor Cyan
+        }
+        else
+        {
+            Write-Host "Downloading Driver: $DriverFileName..." -ForegroundColor Cyan
+            Start-BitsTransfer -Source $DownloadUrl -Destination $TargetFile
         }
     }
 
-    $DriverPath = Join-Path $Folder "$( $DesiredGpuType.tag )_$DesiredVersion.exe"
-    DownloadDriver -Version $DesiredVersion -MachineType $DesiredGpuType.machinetype -WinVersion $DesiredGpuType.winversion -Arch $DesiredGpuType.winarchitecture -Dest $DriverPath
-}
+    if ($Mode -match 'install')
+    {
+        if (-not (Test-Path $TargetFile))
+        {
+            Write-Host "Driver file not found for installation: $TargetFile" -ForegroundColor Red
+            return
+        }
 
-if ($Mode -in @('install-only', 'download-install'))
+        $SevenZipPath = Get-SevenZipPath
+        if ($null -eq $SevenZipPath)
+        {
+            Write-Host "7-Zip not found. Extraction required for minimal installation." -ForegroundColor Red
+            return
+        }
+
+        $ExtractPath = Join-Path $Folder "Extracted"
+        if (Test-Path $ExtractPath)
+        {
+            Remove-Item $ExtractPath -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        New-Item -Path $ExtractPath -ItemType Directory -Force | Out-Null
+
+        Write-Host "Extracting driver to $ExtractPath..." -ForegroundColor Cyan
+        & $SevenZipPath x "$TargetFile" "-o$ExtractPath" -y | Out-Null
+
+        Write-Host "Starting Minimal Nvidia Driver Installation..." -ForegroundColor Green
+        # DisplayDriver = Base Driver, NVI2 = Installer Framework, PhysX = PhysX support
+        # setup.exe -s = silent mode
+        $SetupPath = Join-Path $ExtractPath "setup.exe"
+        if (Test-Path $SetupPath)
+        {
+            Start-Process -FilePath $SetupPath -ArgumentList "-s", "-n", "-f", "DisplayDriver", "NVI2", "PhysX" -Wait -Verb RunAs
+            Write-Host "Operation completed." -ForegroundColor Green
+        }
+        else
+        {
+            Write-Host "Setup.exe not found in extracted folder." -ForegroundColor Red
+        }
+    }
+}
+catch
 {
-    $DriverFile = Get-DriverFileName -DriverDir $Folder
-    $ExtractPath = Join-Path $Folder ([System.IO.Path]::GetFileNameWithoutExtension($DriverFile))
-    InstallDriver -DriverExe (Join-Path $Folder $DriverFile) -ExtractPath $ExtractPath
+    Write-Host "An unexpected error occurred: $_" -ForegroundColor Red
 }
-
-Stop-Transcript
-Write-Host "`nAll operations completed."
-Start-Sleep -Seconds 5
-exit
+finally
+{
+    Stop-Transcript
+    Write-Host "`nAll operations completed. Exiting in 5 seconds..."
+    Start-Sleep -Seconds 5
+}

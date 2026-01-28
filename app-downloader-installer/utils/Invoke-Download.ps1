@@ -1,4 +1,5 @@
 # https://github.com/DanGough/PsDownload
+
 function Invoke-Download
 {
     [CmdletBinding()]
@@ -26,7 +27,8 @@ function Invoke-Download
         [switch]$PassThru
     )
 
-    begin {
+    begin
+    {
         # Required on Windows Powershell only
         if ($PSEdition -eq 'Desktop')
         {
@@ -41,8 +43,8 @@ function Invoke-Download
         $HttpClient = New-Object System.Net.Http.HttpClient
     }
 
-    process {
-
+    process
+    {
         Write-Verbose "Requesting headers from URL '$URL'"
 
         foreach ($UserAgentString in $UserAgent)
@@ -79,19 +81,24 @@ function Invoke-Download
                 $FileSize = [int]$ResponseHeader.Content.Headers.GetValues('Content-Length')[0]
                 $FileSizeReadable = switch ($FileSize)
                 {
-                    { $_ -gt 1TB } {
+                    { $_ -gt 1TB }
+                    {
                         '{0:n2} TB' -f ($_ / 1TB); Break
                     }
-                    { $_ -gt 1GB } {
+                    { $_ -gt 1GB }
+                    {
                         '{0:n2} GB' -f ($_ / 1GB); Break
                     }
-                    { $_ -gt 1MB } {
+                    { $_ -gt 1MB }
+                    {
                         '{0:n2} MB' -f ($_ / 1MB); Break
                     }
-                    { $_ -gt 1KB } {
+                    { $_ -gt 1KB }
+                    {
                         '{0:n2} KB' -f ($_ / 1KB); Break
                     }
-                    default {
+                    default
+                    {
                         '{0} B' -f $_
                     }
                 }
@@ -102,7 +109,7 @@ function Invoke-Download
                 Write-Verbose 'Unable to determine file size'
             }
 
-            # Try to get the last modified date from the "Last-Modified" header, use error handling in case string is in invalid format
+            # Try to get the last modified date from the "Last-Modified" header
             try
             {
                 $LastModified = $null
@@ -132,6 +139,7 @@ function Invoke-Download
                 {
                     Write-Verbose 'Content-Disposition header not found'
                 }
+
                 if ($ContentDispositionHeader)
                 {
                     $ContentDispositionRegEx = @'
@@ -139,7 +147,7 @@ function Invoke-Download
 '@
                     if ($ContentDispositionHeader -match $ContentDispositionRegEx)
                     {
-                        # GetFileName ensures we are not getting a full path with slashes. UrlDecode will convert characters like %20 back to spaces.
+                        # GetFileName ensures we are not getting a full path with slashes.
                         $FileName = [System.IO.Path]::GetFileName([System.Web.HttpUtility]::UrlDecode($matches[1]))
                         # If any further invalid filename characters are found, convert them to spaces.
                         [IO.Path]::GetinvalidFileNameChars() | ForEach-Object { $FileName = $FileName.Replace($_, ' ') }
@@ -152,27 +160,24 @@ function Invoke-Download
                     }
                 }
 
-                if ( [string]::IsNullOrEmpty($FileName))
+                if ([string]::IsNullOrEmpty($FileName))
                 {
-                    # If failed to parse Content-Disposition header or if it's not available, extract the file name from the absolute URL to capture any redirections.
-                    # GetFileName ensures we are not getting a full path with slashes. UrlDecode will convert characters like %20 back to spaces. The URL is split with ? to ensure we can strip off any API parameters.
+                    # If failed to parse Content-Disposition header, extract from absolute URL
                     $FileName = [System.IO.Path]::GetFileName([System.Web.HttpUtility]::UrlDecode($ResponseHeader.RequestMessage.RequestUri.AbsoluteUri.Split('?')[0]))
                     [IO.Path]::GetinvalidFileNameChars() | ForEach-Object { $FileName = $FileName.Replace($_, ' ') }
                     $FileName = $FileName.Trim()
                     Write-Verbose "Extracted filename '$FileName' from absolute URL '$( $ResponseHeader.RequestMessage.RequestUri.AbsoluteUri )'"
                 }
             }
-
         }
         else
         {
             Write-Verbose 'Failed to retrieve headers'
         }
 
-        if ( [string]::IsNullOrEmpty($FileName))
+        if ([string]::IsNullOrEmpty($FileName))
         {
-            # If still no filename set, extract the file name from the original URL.
-            # GetFileName ensures we are not getting a full path with slashes. UrlDecode will convert characters like %20 back to spaces. The URL is split with ? to ensure we can strip off any API parameters.
+            # If still no filename set, extract from original URL
             $FileName = [System.IO.Path]::GetFileName([System.Web.HttpUtility]::UrlDecode($URL.Split('?')[0]))
             [System.IO.Path]::GetInvalidFileNameChars() | ForEach-Object { $FileName = $FileName.Replace($_, ' ') }
             $FileName = $FileName.Trim()
@@ -181,7 +186,7 @@ function Invoke-Download
 
         $DestinationFilePath = Join-Path $Destination $FileName
 
-        # Exit if -NoClobber specified and file exists.
+        # Exit if -NoClobber specified and file exists
         if ($NoClobber -and (Test-Path -LiteralPath $DestinationFilePath -PathType Leaf))
         {
             Write-Error 'NoClobber switch specified and file already exists'
@@ -193,7 +198,6 @@ function Invoke-Download
 
         if ($ResponseStream.CanRead)
         {
-
             # Check TempPath exists and create it if not
             if (-not (Test-Path -LiteralPath $TempPath -PathType Container))
             {
@@ -214,7 +218,7 @@ function Invoke-Download
             $TempFileName = (New-Guid).ToString('N') + ".tmp"
             $TempFilePath = Join-Path $TempPath $TempFileName
 
-            # Check Destiation exists and create it if not
+            # Check Destination exists and create it if not
             if (-not (Test-Path -LiteralPath $Destination -PathType Container))
             {
                 Write-Verbose "Output folder '$Destination' does not exist"
@@ -257,7 +261,7 @@ function Invoke-Download
                         # Read stream into buffer
                         $ReadBytes = $ResponseStream.Read($Buffer, 0, $Buffer.Length)
 
-                        # Track bytes downloaded and display progress bar if enabled and file size is known
+                        # Track bytes downloaded and display progress bar
                         $BytesDownloaded += $ReadBytes
                         if (!$NoProgress -and (Get-Date) -gt $ProgressTimer.AddMilliseconds($ProgressIntervalMs))
                         {
@@ -289,6 +293,7 @@ function Invoke-Download
                                 Write-Error "Error moving file from '$TempFilePath' to '$DestinationFilePath': $_"
                                 return
                             }
+
                             if ($IsWindows)
                             {
                                 if ($BlockFile)
@@ -301,11 +306,13 @@ function Invoke-Download
                                     Unblock-File -LiteralPath $DownloadedFile
                                 }
                             }
+
                             if ($LastModified -and -not $IgnoreDate)
                             {
                                 Write-Verbose 'Setting Last Modified date'
                                 $DownloadedFile.LastWriteTime = $LastModified
                             }
+
                             Write-Verbose 'Download complete!'
                             if ($PassThru)
                             {
@@ -324,7 +331,6 @@ function Invoke-Download
                         break
                     }
                 }
-
             }
         }
         else
@@ -332,13 +338,13 @@ function Invoke-Download
             Write-Error 'Failed to start download'
         }
 
-        # Reset this to avoid reusing the same name when fed multiple URLs via the pipeline
         $StoredFileName = $FileName
         $FileName = $null
         return $StoredFileName
     }
 
-    end {
+    end
+    {
         $HttpClient.Dispose()
     }
 }

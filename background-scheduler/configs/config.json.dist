@@ -1,0 +1,8 @@
+{
+  "triggers": {
+    "atacama": "example/Atacama/triggers.json"
+  },
+  "schedule": {
+    "Mon": "atacama"
+  }
+}

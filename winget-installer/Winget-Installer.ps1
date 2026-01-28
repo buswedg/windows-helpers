@@ -23,7 +23,9 @@ param (
 
 #Requires -RunAsAdministrator
 
-function Get-ConfigData
+# --- Function Definitions ---
+
+function Get-ConfigPath
 {
     $ConfigDir = Join-Path $PSScriptRoot "configs"
     if (-not (Test-Path $ConfigDir))
@@ -37,10 +39,14 @@ function Get-ConfigData
         $ConfigPath = Join-Path $ConfigDir $Json
         if (-not (Test-Path $ConfigPath))
         {
+            if (Test-Path $Json)
+            {
+                return $Json
+            }
             Write-Host "Specified JSON config file does not exist: $ConfigPath" -ForegroundColor Red
             exit 1
         }
-        return Get-Content $ConfigPath -Raw | ConvertFrom-Json
+        return $ConfigPath
     }
 
     $ConfigFiles = Get-ChildItem -Path $ConfigDir -Filter *.json
@@ -51,8 +57,9 @@ function Get-ConfigData
     }
 
     Write-Host "`nAvailable JSON config files:`n" -ForegroundColor Green
-    for ($i = 0; $i -lt $ConfigFiles.Count; $i++) {
-        Write-Host "$( $i + 1 ): $( $ConfigFiles[$i].Name )"
+    for ($i = 0; $i -lt $ConfigFiles.Count; $i++)
+    {
+        Write-Host ("{0}: {1}" -f ($i + 1), $ConfigFiles[$i].Name)
     }
 
     do
@@ -60,82 +67,101 @@ function Get-ConfigData
         $Selection = Read-Host "`nEnter the number of the JSON config file to use"
     } while (-not ($Selection -match '^\d+$') -or [int]$Selection -lt 1 -or [int]$Selection -gt $ConfigFiles.Count)
 
-    $ConfigFile = $ConfigFiles[[int]$Selection - 1].FullName
-    return Get-Content $ConfigFile -Raw | ConvertFrom-Json
+    return $ConfigFiles[[int]$Selection - 1].FullName
 }
 
-# --- Execution ---
+# --- Main Execution ---
+
 $LogPath = Join-Path $env:TEMP "winget-installer.log"
 Start-Transcript -Path $LogPath
 
-if (-not (Get-Command "winget.exe" -ErrorAction SilentlyContinue))
+try
 {
-    Write-Host "WinGet not found. Installing..." -ForegroundColor Yellow
+    if (-not (Get-Command "winget.exe" -ErrorAction SilentlyContinue))
+    {
+        Write-Host "WinGet not found. Installing..." -ForegroundColor Yellow
 
-    Invoke-WebRequest -Uri https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx -OutFile "$env:TEMP\Microsoft.VCLibs.x64.14.00.Desktop.appx"
-    Invoke-WebRequest -Uri https://aka.ms/getwinget -OutFile "$env:TEMP\winget.msixbundle"
+        Invoke-WebRequest -Uri https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx -OutFile "$env:TEMP\Microsoft.VCLibs.x64.14.00.Desktop.appx"
+        Invoke-WebRequest -Uri https://aka.ms/getwinget -OutFile "$env:TEMP\winget.msixbundle"
 
-    Add-AppxPackage "$env:TEMP\Microsoft.VCLibs.x64.14.00.Desktop.appx" -ErrorAction SilentlyContinue
-    Add-AppxPackage "$env:TEMP\winget.msixbundle" -ErrorAction SilentlyContinue
+        Add-AppxPackage "$env:TEMP\Microsoft.VCLibs.x64.14.00.Desktop.appx" -ErrorAction SilentlyContinue
+        Add-AppxPackage "$env:TEMP\winget.msixbundle" -ErrorAction SilentlyContinue
 
-    Remove-Item "$env:TEMP\winget" -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item "$env:TEMP\winget" -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    $ConfigPath = Get-ConfigPath
+    try
+    {
+        $ConfigData = Get-Content $ConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    }
+    catch
+    {
+        Write-Host "Failed to parse JSON: $ConfigPath" -ForegroundColor Red
+        return
+    }
+
+    if (-not $ConfigData.Apps -or $ConfigData.Apps.Count -eq 0)
+    {
+        Write-Host "No apps found in config file." -ForegroundColor Yellow
+        return
+    }
+
+    # Install apps
+    Write-Host "`nInstalling applications (skipping if already present)..." -ForegroundColor Green
+
+    foreach ($App in $ConfigData.Apps)
+    {
+        Write-Host "`nChecking if '$App' is already installed..." -ForegroundColor Gray
+        winget list --id $App --accept-source-agreements | Out-Null
+        if ($LASTEXITCODE -eq -1978335212)
+        {
+            Write-Host "$App not found. Installing..." -ForegroundColor Yellow
+            winget install $App --silent --force --source winget --accept-package-agreements --accept-source-agreements
+            if ($ConfigData.ProcessesToKill)
+            {
+                foreach ($Proc in $ConfigData.ProcessesToKill)
+                {
+                    Get-Process $Proc -ErrorAction SilentlyContinue | Stop-Process -Force -Confirm:$false
+                }
+            }
+        }
+        else
+        {
+            Write-Host "$App is already installed." -ForegroundColor Cyan
+        }
+    }
+
+    # Cleanup files
+    if ($ConfigData.FilesToClean)
+    {
+        Write-Host "`nCleaning specified files from desktop..." -ForegroundColor Green
+        $PublicDesktop = "C:\Users\Public\Desktop"
+        $UserDesktop = [Environment]::GetFolderPath("Desktop")
+        $CutoffTime = (Get-Date).AddHours(-1)
+
+        foreach ($File in $ConfigData.FilesToClean)
+        {
+            foreach ($Path in @($PublicDesktop, $UserDesktop))
+            {
+                Get-ChildItem "$Path\$File" -ErrorAction SilentlyContinue |
+                        Where-Object { $_.LastWriteTime -le $CutoffTime } |
+                        Remove-Item -Force -ErrorAction SilentlyContinue
+
+                Get-ChildItem "$Path\$File" -Hidden -ErrorAction SilentlyContinue |
+                        Where-Object { $_.LastWriteTime -le $CutoffTime } |
+                        Remove-Item -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
 }
-
-$ConfigData = Get-ConfigData
-
-if (-not $ConfigData.Apps -or $ConfigData.Apps.Count -eq 0)
+catch
 {
-    Write-Host "No apps found in config file." -ForegroundColor Yellow
+    Write-Host "An unexpected error occurred: $_" -ForegroundColor Red
+}
+finally
+{
     Stop-Transcript
-    exit 0
+    Write-Host "`nAll operations completed. Exiting in 5 seconds..."
+    Start-Sleep -Seconds 5
 }
-
-# Install apps
-Write-Host "`nInstalling applications (skipping if already present)..." -ForegroundColor Green
-
-foreach ($App in $ConfigData.Apps)
-{
-    Write-Host "`nChecking if '$App' is already installed..."
-    winget list --id $App --accept-source-agreements | Out-Null
-    if ($LASTEXITCODE -eq -1978335212)
-    {
-        Write-Host "$App not found. Installing..." -ForegroundColor Yellow
-        winget install $App --silent --force --source winget --accept-package-agreements --accept-source-agreements
-        foreach ($Proc in $ConfigData.ProcessesToKill)
-        {
-            Get-Process $Proc -ErrorAction SilentlyContinue | Stop-Process -Force -Confirm:$false
-        }
-    }
-    else
-    {
-        Write-Host "$App is already installed." -ForegroundColor Cyan
-    }
-}
-
-# Cleanup files
-if ($ConfigData.FilesToClean)
-{
-    Write-Host "`nCleaning specified files from desktop..." -ForegroundColor Green
-    $PublicDesktop = "C:\Users\Public\Desktop"
-    $UserDesktop = [Environment]::GetFolderPath("Desktop")
-    $CutoffTime = (Get-Date).AddHours(-1)
-
-    foreach ($File in $ConfigData.FilesToClean)
-    {
-        foreach ($Path in @($PublicDesktop, $UserDesktop))
-        {
-            Get-ChildItem "$Path\$File" -ErrorAction SilentlyContinue |
-                    Where-Object { $_.LastWriteTime -le $CutoffTime } |
-                    Remove-Item -Force -ErrorAction SilentlyContinue
-
-            Get-ChildItem "$Path\$File" -Hidden -ErrorAction SilentlyContinue |
-                    Where-Object { $_.LastWriteTime -le $CutoffTime } |
-                    Remove-Item -Force -ErrorAction SilentlyContinue
-        }
-    }
-}
-
-Stop-Transcript
-Write-Host "`nAll operations completed. Exiting in 5 seconds..."
-Start-Sleep -Seconds 5
-exit

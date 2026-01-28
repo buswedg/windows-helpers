@@ -1,4 +1,5 @@
 .idea
-**/downloads/
 **/configs/*.json
+**/downloads/
+**/shortcuts/
 run_ndm_complete.bat

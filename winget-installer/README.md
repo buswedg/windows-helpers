@@ -1,4 +1,4 @@
-# Winget-Installer
+# WinGet-Installer
 
 Installs a configurable list of applications using WinGet and PowerShell.
 

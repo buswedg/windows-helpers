@@ -1,0 +1,40 @@
+{
+  "triggers": [
+    {
+      "time": "00:00:00",
+      "image": "Atacama_1.png"
+    },
+    {
+      "time": "06:00:00",
+      "image": "Atacama_2.png"
+    },
+    {
+      "time": "09:00:00",
+      "image": "Atacama_3.png"
+    },
+    {
+      "time": "12:00:00",
+      "image": "Atacama_0.png"
+    },
+    {
+      "time": "15:00:00",
+      "image": "Atacama_4.png"
+    },
+    {
+      "time": "17:00:00",
+      "image": "Atacama_5.png"
+    },
+    {
+      "time": "19:00:00",
+      "image": "Atacama_6.png"
+    },
+    {
+      "time": "20:00:00",
+      "image": "Atacama_7.png"
+    },
+    {
+      "time": "22:00:00",
+      "image": "Atacama_8.png"
+    }
+  ]
+}
