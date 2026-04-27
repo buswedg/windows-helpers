@@ -1,9 +1,9 @@
 {
-   "Apps": [
-      "7zip.7zip",
-      "GIMP.GIMP.2",
-      "VideoLAN.VLC"
-   ],
+   "Apps": {
+      "7zip.7zip": "latest",
+      "GIMP.GIMP.2": "latest",
+      "VideoLAN.VLC": "latest"
+   },
    "FilesToClean": [
       "*.lnk",
       "desktop.ini"

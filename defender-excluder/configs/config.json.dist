@@ -1,0 +1,6 @@
+{
+    "Exclusions": [
+        "C:\\Path\\To\\Exclude",
+        "D:\\Another\\Path"
+    ]
+}

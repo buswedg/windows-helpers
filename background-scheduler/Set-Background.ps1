@@ -5,14 +5,14 @@ Sets the desktop background based on time-of-day triggers.
 .DESCRIPTION
 Manages wallpapers via time-of-day triggers defined in a JSON file.
 
-.PARAMETER Json
+.PARAMETER Triggers
 Path to the JSON file containing background triggers.
 #>
 
 [CmdletBinding()]
 param (
     [Parameter(Mandatory=$true)]
-    [string]$Json
+    [string]$Triggers
 )
 
 # --- Function Definitions ---
@@ -108,16 +108,16 @@ public class Background {
 
 try
 {
-    $ConfigPath = [System.IO.Path]::GetFullPath($Json)
-    $Triggers = Get-NormalizedTriggers -ConfigFilePath $ConfigPath
+    $TriggersPath = [System.IO.Path]::GetFullPath($Triggers)
+    $NormalizedTriggers = Get-NormalizedTriggers -ConfigFilePath $TriggersPath
     
-    if ($null -eq $Triggers) { return }
+    if ($null -eq $NormalizedTriggers) { return }
 
-    # Determine Correct Background (Time-based)
+    # Determine active trigger based on time
     $Now = (Get-Date).TimeOfDay
     $ActiveTrigger = $null
     
-    $SortedTriggers = $Triggers | ForEach-Object { 
+    $SortedTriggers = $NormalizedTriggers | ForEach-Object { 
         $_ | Select-Object path, @{
             n = 'time'
             e = { [TimeSpan]::Parse($_.time) }
@@ -132,7 +132,7 @@ try
         }
     }
 
-    # Wrap around logic
+    # Handle wrap-around for late night triggers
     if ($null -eq $ActiveTrigger)
     {
         $ActiveTrigger = $SortedTriggers[-1]
@@ -140,7 +140,6 @@ try
 
     if ($ActiveTrigger -and (Test-Path $ActiveTrigger.path))
     {
-        Write-Host "Setting wallpaper: $($ActiveTrigger.path) (Trigger: $($ActiveTrigger.time))" -ForegroundColor Green
         Set-Wallpaper -Path $ActiveTrigger.path
     }
 }

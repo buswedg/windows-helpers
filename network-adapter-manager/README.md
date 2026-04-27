@@ -8,10 +8,10 @@ Configure a set of network adapters using PowerShell.
 - **Safe Execution**: Checks if adapters exist before attempting modification to avoid errors.
 
 ## Usage
-1. **Configure Adapters**: Create a `config.json` file in the `configs` folder defining which adapters should be enabled or disabled.
+1. **Configure Adapters**: Create a JSON file in the `configs` folder defining the list of adapters.
 2. **Run Manager**: Execute `Network-Adapter-Manager.ps1` with your configuration:
 ```powershell
-.\Network-Adapter-Manager.ps1 -Json "config.json"
+.\Network-Adapter-Manager.ps1 -Config "config.json"
 ```
 
 3. **Disable All**: Run with the `-DisableAll` switch to disable all network interfaces.
@@ -21,16 +21,18 @@ Configure a set of network adapters using PowerShell.
 ```
 
 ## Configuration
-Example structure for `config.json`:
+Adapters can be identified either by their native Windows `Name` or a `MAC` address (which is consistent across reinstalls). If `MAC` is supplied, it takes priority over `Name`.
+
+Example structure for `config.json` showcasing different identification methods:
 ```json
 {
   "Adapters": [
     {
-      "Name": "Ethernet",
+      "Name": "Virtual Switch",
       "Enabled": true
     },
     {
-      "Name": "Wi-Fi",
+      "MAC": "00:11:22:33:44:55",
       "Enabled": false
     }
   ]

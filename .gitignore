@@ -2,4 +2,6 @@
 **/configs/*.json
 **/downloads/
 **/shortcuts/
-run_ndm_complete.bat
+nvidia-driver-manager/
+winget-installer/offline_bundle/
+winiso-autounattend-injector/iso/

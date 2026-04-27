@@ -6,7 +6,7 @@ Configure a set of network adapters using PowerShell.
 This script can either read a JSON file containing a set of network adapter configurations and apply them, 
 or disable all network adapters if the -DisableAll switch is used.
 
-.PARAMETER Json
+.PARAMETER Config
 Name of the JSON file (from the 'configs' directory) that contains the set of adapter configurations.
 
 .PARAMETER DisableAll
@@ -16,12 +16,12 @@ Optional switch to disable all physical network adapters, bypassing the JSON con
 Console output and a log file saved to %TEMP%\network-adapter-manager.log.
 
 .EXAMPLE
-PS> .\Network-Adapter-Manager.ps1 -Json "config.json"
+PS> .\Network-Adapter-Manager.ps1 -Config "config.json"
 #>
 
 [CmdletBinding()]
 param (
-    [string]$Json,
+    [string]$Config,
     [switch]$DisableAll
 )
 
@@ -38,14 +38,14 @@ function Get-ConfigPath
         exit 1
     }
 
-    if ($Json)
+    if ($Config)
     {
-        $ConfigPath = Join-Path $ConfigDir $Json
+        $ConfigPath = Join-Path $ConfigDir $Config
         if (-not (Test-Path $ConfigPath))
         {
-            if (Test-Path $Json)
+            if (Test-Path $Config)
             {
-                return $Json
+                return $Config
             }
             Write-Host "Specified JSON config file does not exist: $ConfigPath" -ForegroundColor Red
             exit 1
@@ -124,43 +124,65 @@ try
             return
         }
 
-        foreach ($Config in $ConfigData.Adapters)
+        foreach ($AdapterConfig in $ConfigData.Adapters)
         {
             try
             {
-                $ConfigName = $Config.Name
-                $ConfigEnabled = $Config.Enabled
+                $ConfigEnabled = $AdapterConfig.Enabled
+                $ConfigName = $AdapterConfig.Name
+                $TargetMac = $AdapterConfig.MAC
 
-                $Adapter = Get-NetAdapter -Name $ConfigName -ErrorAction Stop
+                $Adapter = $null
+                
+                if ($TargetMac) {
+                    # Filter locally to avoid issues with formatting nuances (e.g. hyphens vs colons)
+                    $AdapterMac = $TargetMac -replace '[:-]', ''
+                    $Adapter = Get-NetAdapter -IncludeHidden -ErrorAction Stop | Where-Object { ($_.MacAddress -replace '[:-]', '') -eq $AdapterMac } | Select-Object -First 1
+                    $DisplayName = if ($ConfigName) { "$ConfigName ($TargetMac)" } else { $TargetMac }
+                } elseif ($ConfigName) {
+                    $Adapter = Get-NetAdapter -Name $ConfigName -ErrorAction Stop
+                    $DisplayName = $ConfigName
+                } else {
+                    Write-Host "Warning: Adapter config missing both Name and MAC." -ForegroundColor Yellow
+                    continue
+                }
+
+                if (-not $Adapter) {
+                    Write-Host "Warning: Adapter '$DisplayName' not found on this system." -ForegroundColor Yellow
+                    continue
+                }
+                
+                # Fetch fresh status using Name just to be safe as pipeline objects can get stale
+                $FreshAdapter = Get-NetAdapter -Name $Adapter.Name
                 
                 if ($ConfigEnabled)
                 {
-                    if ($Adapter.Status -eq 'Disabled')
+                    if ($FreshAdapter.Status -eq 'Disabled')
                     {
-                        Write-Host "Enabling adapter: $ConfigName" -ForegroundColor Cyan
-                        Enable-NetAdapter -Name $ConfigName -Confirm:$false
+                        Write-Host "Enabling adapter: $DisplayName (Windows Name: $($FreshAdapter.Name))" -ForegroundColor Cyan
+                        Enable-NetAdapter -Name $FreshAdapter.Name -Confirm:$false
                     }
                     else
                     {
-                        Write-Host "Adapter already enabled: $ConfigName" -ForegroundColor Gray
+                        Write-Host "Adapter already enabled: $DisplayName" -ForegroundColor Gray
                     }
                 }
                 else
                 {
-                    if ($Adapter.Status -ne 'Disabled')
+                    if ($FreshAdapter.Status -ne 'Disabled')
                     {
-                        Write-Host "Disabling adapter: $ConfigName" -ForegroundColor Yellow
-                        Disable-NetAdapter -Name $ConfigName -Confirm:$false
+                        Write-Host "Disabling adapter: $DisplayName (Windows Name: $($FreshAdapter.Name))" -ForegroundColor Yellow
+                        Disable-NetAdapter -Name $FreshAdapter.Name -Confirm:$false
                     }
                     else
                     {
-                        Write-Host "Adapter already disabled: $ConfigName" -ForegroundColor Gray
+                        Write-Host "Adapter already disabled: $DisplayName" -ForegroundColor Gray
                     }
                 }
             }
             catch
             {
-                Write-Host "Warning: Adapter '$($Config.Name)' not found on this system." -ForegroundColor Yellow
+                Write-Host "Error processing adapter '$($AdapterConfig.Name)': $($_.Exception.Message)" -ForegroundColor Red
             }
         }
     }

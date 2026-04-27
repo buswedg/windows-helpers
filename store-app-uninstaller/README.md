@@ -11,7 +11,7 @@ Uninstalls a configurable list of Windows Store applications using PowerShell.
 1. **Configure Apps**: Create a `config.json` file in the `configs` folder listing the package names of apps to remove.
 2. **Run Uninstaller**: Execute `Store-App-Uninstaller.ps1` with the configuration:
 ```powershell
-.\Store-App-Uninstaller.ps1 -Json "config.json"
+.\Store-App-Uninstaller.ps1 -Config "config.json"
 ```
 
 ## Configuration

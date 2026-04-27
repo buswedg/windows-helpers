@@ -5,22 +5,23 @@ Main entry point for the background scheduler.
 .DESCRIPTION
 Coordinates theme selection and background application.
 
-.PARAMETER Json
+.PARAMETER Config
 Name of the JSON file (from the 'configs' directory) that contains the theme library and schedule.
 
 .OUTPUTS
 Console output and log file saved to %TEMP%\background-scheduler.log.
 
 .EXAMPLE
-PS> .\Background-Scheduler.ps1 -Json "default.json"
+PS> .\Background-Scheduler.ps1 -Config "default.json"
 #>
 
 [CmdletBinding()]
 param (
-    [string]$Json
+    [string]$Config
 )
 
 # --- Configuration ---
+
 $LogPath = Join-Path $env:TEMP "background-scheduler.log"
 $ApplierPath = Join-Path $PSScriptRoot "Set-Background.ps1"
 
@@ -35,14 +36,14 @@ function Get-ConfigPath
         exit 1
     }
 
-    if ($Json)
+    if ($Config)
     {
-        $ConfigPath = Join-Path $ConfigDir $Json
+        $ConfigPath = Join-Path $ConfigDir $Config
         if (-not (Test-Path $ConfigPath))
         {
-            if (Test-Path $Json)
+            if (Test-Path $Config)
             {
-                return $Json
+                return $Config
             }
             Write-Host "Specified JSON config file does not exist: $ConfigPath" -ForegroundColor Red
             exit 1
@@ -78,6 +79,7 @@ function Resolve-PathRobust
     return [System.IO.Path]::GetFullPath((Join-Path $Dir $Target))
 }
 
+
 # --- Main Execution ---
 
 Start-Transcript -Path $LogPath -Append
@@ -86,7 +88,7 @@ try
 {
     Write-Host "`n--- Background Scheduler Run: $(Get-Date) ---" -ForegroundColor Gray
     
-    # 1. Resolve Config
+    # 1. Resolve config
     $ConfigPath = Get-ConfigPath
     $ConfigDir = Split-Path $ConfigPath -Parent
     
@@ -106,12 +108,12 @@ try
         return
     }
 
-    # 2. Determine Theme
+    # 2. Determine theme
     $DayFull = (Get-Date).DayOfWeek.ToString()
     $DayShort = $DayFull.Substring(0, 3)
     $ThemeName = $null
 
-    # Check Schedule
+    # Check schedule
     $Schedule = $Data.schedule
     if ($Schedule)
     {
@@ -131,7 +133,7 @@ try
     {
         $LibraryThemes = $Library.psobject.Properties.Name
         
-        # Create a Seed from Today's date (YYYYMMDD) ensuring consistency across the entire day
+        # Create deterministic seed from today's date
         $Seed = [int](Get-Date -Format "yyyyMMdd")
         $ThemeName = $LibraryThemes | Get-Random -SetSeed $Seed
         
@@ -142,7 +144,7 @@ try
         Write-Host "Day: $DayFull -> Scheduled theme: $ThemeName" -ForegroundColor Cyan
     }
 
-    # 3. Resolve Theme Triggers Path
+    # 3. Resolve theme triggers path
     $ThemePath = $Library.$ThemeName
     if ($null -eq $ThemePath)
     {
@@ -157,7 +159,7 @@ try
         return
     }
 
-    # 4. Call Applier
+    # 4. Call applier
     if (-not (Test-Path $ApplierPath))
     {
         Write-Host "Error: Applier script not found: $ApplierPath" -ForegroundColor Red
@@ -165,7 +167,7 @@ try
     }
 
     Write-Host "Applying background triggers from: $TriggersPath" -ForegroundColor Cyan
-    & $ApplierPath -Json $TriggersPath
+    & $ApplierPath -Trigger $TriggersPath
     
     Write-Host "--- Background Scheduler Run Complete ---" -ForegroundColor Gray
 }

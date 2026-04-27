@@ -5,19 +5,19 @@ Uninstalls a configurable list of Windows Store applications using PowerShell.
 .DESCRIPTION
 This script reads a JSON file containing a list of application package names, and uninstalls each matching app for all users.
 
-.PARAMETER Json
+.PARAMETER Config
 Name of the JSON file (from the 'configs' directory) that contains the list of apps to uninstall.
 
 .OUTPUTS
 Console output and log file saved to %TEMP%\store-app-uninstaller.log.
 
 .EXAMPLE
-PS> .\Store-App-Uninstaller.ps1 -Json "default.json"
+PS> .\Store-App-Uninstaller.ps1 -Config "default.json"
 #>
 
 [CmdletBinding()]
 param (
-    [string]$Json
+    [string]$Config
 )
 
 #Requires -RunAsAdministrator
@@ -33,14 +33,14 @@ function Get-ConfigPath
         exit 1
     }
 
-    if ($Json)
+    if ($Config)
     {
-        $ConfigPath = Join-Path $ConfigDir $Json
+        $ConfigPath = Join-Path $ConfigDir $Config
         if (-not (Test-Path $ConfigPath))
         {
-            if (Test-Path $Json)
+            if (Test-Path $Config)
             {
-                return $Json
+                return $Config
             }
             Write-Host "Specified JSON config file does not exist: $ConfigPath" -ForegroundColor Red
             exit 1

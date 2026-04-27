@@ -3,21 +3,22 @@
 Installs a configurable list of applications using WinGet and PowerShell.
 
 .DESCRIPTION
-This script reads a JSON file that lists application IDs, and installs each application ID via WinGet.
+This script reads a JSON file that lists application IDs, and downloads/installs each application ID via WinGet.
 
-.PARAMETER Json
+.PARAMETER Config
 Name of the JSON file (from the 'configs' directory) containing application IDs and optional cleanup info.
 
 .OUTPUTS
 Console output and log file saved to %TEMP%\winget-installer.log.
 
 .EXAMPLE
-PS> .\Winget-Installer.ps1 -Json "config.json"
+PS> .\Winget-Installer.ps1 -Config "config.json"
 #>
 
 [CmdletBinding()]
 param (
-    [string]$Json
+    [string]$Config,
+    [switch]$DownloadOnly
 )
 
 #Requires -RunAsAdministrator
@@ -33,14 +34,14 @@ function Get-ConfigPath
         exit 1
     }
 
-    if ($Json)
+    if ($Config)
     {
-        $ConfigPath = Join-Path $ConfigDir $Json
+        $ConfigPath = Join-Path $ConfigDir $Config
         if (-not (Test-Path $ConfigPath))
         {
-            if (Test-Path $Json)
+            if (Test-Path $Config)
             {
-                return $Json
+                return $Config
             }
             Write-Host "Specified JSON config file does not exist: $ConfigPath" -ForegroundColor Red
             exit 1
@@ -106,28 +107,96 @@ try
         return
     }
 
-    # Install apps
-    Write-Host "`nInstalling applications (skipping if already present)..." -ForegroundColor Green
-
-    foreach ($App in $ConfigData.Apps)
+    # Execution branches
+    if ($DownloadOnly)
     {
-        Write-Host "`nChecking if '$App' is already installed..." -ForegroundColor Gray
-        winget list --id $App --accept-source-agreements | Out-Null
-        if ($LASTEXITCODE -eq -1978335212)
+        $BundleDir = Join-Path $PSScriptRoot "offline_bundle"
+        if (-not (Test-Path $BundleDir))
         {
-            Write-Host "$App not found. Installing..." -ForegroundColor Yellow
-            winget install $App --silent --force --source winget --accept-package-agreements --accept-source-agreements
-            if ($ConfigData.ProcessesToKill)
+            New-Item -Path $BundleDir -ItemType Directory -Force | Out-Null
+        }
+
+        Write-Host "`nDownloading applications to $BundleDir..." -ForegroundColor Green
+        
+        $InstallScriptPath = Join-Path $BundleDir "install.bat"
+        $InstallScriptContent = "@echo off`r`n:: Auto-generated offline installer script`r`n:: Run as Administrator to install all packages silently.`r`n`r`n"
+        
+        # Test elevation in the generated batch script
+        $InstallScriptContent += "net session >nul 2>&1`r`nif %errorLevel% neq 0 (`r`n    echo Requesting Administrator privileges...`r`n    powershell -Command `"Start-Process cmd -ArgumentList '/c %~dpnx0' -Verb RunAs`"`r`n    exit /b`r`n)`r`n`r`n"
+        
+        # Go to script directory
+        $InstallScriptContent += "cd /d `"%~dp0`"`r`n`r`n"
+
+        foreach ($AppProp in $ConfigData.Apps.psobject.Properties)
+        {
+            $App = $AppProp.Name
+            $Version = $AppProp.Value
+            
+            Write-Host "`nDownloading package for '$App' (Version: $Version)..." -ForegroundColor Cyan
+            
+            $AppDir = Join-Path $BundleDir $App
+            if (-not (Test-Path $AppDir)) {
+                 New-Item -Path $AppDir -ItemType Directory -Force | Out-Null
+            }
+
+            $VersionArg = if ($Version -ne "latest") { "--version $Version" } else { "" }
+            if ($Version -ne "latest") {
+                winget download --id $App --version $Version --download-directory $AppDir --accept-source-agreements
+            } else {
+                winget download --id $App --download-directory $AppDir --accept-source-agreements
+            }
+            
+            # Add an entry to install.bat for whatever installers landed in the folder
+            $InstallScriptContent += "echo Installing $App...`r`n"
+            $InstallScriptContent += "for %%f in (`"$App\*.exe`") do ( start /wait `"`" `"%%f`" )`r`n"
+            $InstallScriptContent += "for %%f in (`"$App\*.msi`") do ( msiexec.exe /i `"%%f`" /qn /norestart )`r`n"
+            $InstallScriptContent += "for %%f in (`"$App\*.msix`", `"$App\*.appx`") do ( powershell -Command `"Add-AppxPackage -Path '%%f'`" )`r`n`r`n"
+        }
+
+        $InstallScriptContent += "echo.`r`necho All operations completed.`r`npause`r`n"
+        Set-Content -Path $InstallScriptPath -Value $InstallScriptContent -Encoding UTF8
+        Write-Host "`nOffline bundle generation complete. Check the \offline_bundle folder and use install.bat on your target machine." -ForegroundColor Green
+    }
+    else
+    {
+        # Install Logic
+        Write-Host "`nInstalling applications (skipping if already present)..." -ForegroundColor Green
+
+        foreach ($AppProp in $ConfigData.Apps.psobject.Properties)
+        {
+            $App = $AppProp.Name
+            $Version = $AppProp.Value
+
+            Write-Host "`nChecking if '$App' (Version: $Version) is already installed..." -ForegroundColor Gray
+            
+            if ($Version -ne "latest") {
+                winget list --id $App --version $Version --accept-source-agreements | Out-Null
+            } else {
+                winget list --id $App --accept-source-agreements | Out-Null
+            }
+
+            if ($LASTEXITCODE -eq -1978335212)
             {
-                foreach ($Proc in $ConfigData.ProcessesToKill)
+                Write-Host "$App (Version: $Version) not found. Installing..." -ForegroundColor Yellow
+                
+                if ($Version -ne "latest") {
+                    winget install $App --version $Version --silent --force --source winget --accept-package-agreements --accept-source-agreements
+                } else {
+                    winget install $App --silent --force --source winget --accept-package-agreements --accept-source-agreements
+                }
+
+                if ($ConfigData.ProcessesToKill)
                 {
-                    Get-Process $Proc -ErrorAction SilentlyContinue | Stop-Process -Force -Confirm:$false
+                    foreach ($Proc in $ConfigData.ProcessesToKill)
+                    {
+                        Get-Process $Proc -ErrorAction SilentlyContinue | Stop-Process -Force -Confirm:$false
+                    }
                 }
             }
-        }
-        else
-        {
-            Write-Host "$App is already installed." -ForegroundColor Cyan
+            else
+            {
+                Write-Host "$App (Version: $Version) is already installed." -ForegroundColor Cyan
+            }
         }
     }
 

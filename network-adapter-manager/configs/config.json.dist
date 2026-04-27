@@ -6,6 +6,7 @@
     },
     {
       "Name": "Ethernet 2",
+      "MAC": "00:11:22:33:44:55",
       "Enabled": true,
       "Mode": "static",
       "IPAddress": "192.168.1.10",

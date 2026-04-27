@@ -1,34 +1,24 @@
 <#
 .SYNOPSIS
-Downloads and/or installs a configurable list of applications using PowerShell.
+Installs a configurable list of applications using PowerShell.
 
 .DESCRIPTION
-This script reads a JSON file containing application definitions, then downloads and/or installs the specified applications based on the selected mode.
+This script reads a JSON file that lists applications, and downloads/installs each application via PowerShell.
 
-.PARAMETER Mode
-Operation mode: 'download-only', 'install-only', or 'download-install'. Default is 'download-only'.
-
-.PARAMETER Folder
-Download and extraction directory. Default is $env:TEMP\downloads.
-
-.PARAMETER Json
-Name of the JSON file (located in the 'configs' folder) that defines the applications to process.
+.PARAMETER Config
+Name of the JSON file (from the 'configs' directory) containing application configurations.
 
 .OUTPUTS
-Console output and log file saved to %TEMP%\app-downloader-installer.log.
+Console output and log file saved to %TEMP%\app-installer.log.
 
 .EXAMPLE
-PS> .\App-Downloader-Installer.ps1 -Mode download-install -Json "config.json"
+PS> .\App-Installer.ps1 -Config "config.json"
 #>
 
-[CmdletBinding(DefaultParameterSetName = "All")]
+[CmdletBinding()]
 param (
-    [ValidateSet("download-only", "install-only", "download-install")]
-    [string]$Mode = "download-only",
-
-    [string]$Folder = "$env:TEMP\downloads",
-
-    [string]$Json
+    [string]$Config,
+    [switch]$DownloadOnly
 )
 
 #Requires -RunAsAdministrator
@@ -44,14 +34,14 @@ function Get-ConfigPath
         exit 1
     }
 
-    if ($Json)
+    if ($Config)
     {
-        $ConfigPath = Join-Path $ConfigDir $Json
+        $ConfigPath = Join-Path $ConfigDir $Config
         if (-not (Test-Path $ConfigPath))
         {
-            if (Test-Path $Json)
+            if (Test-Path $Config)
             {
-                return $Json
+                return $Config
             }
             Write-Host "Specified JSON config file does not exist: $ConfigPath" -ForegroundColor Red
             exit 1
@@ -187,7 +177,8 @@ function Install-Files
 
 # --- Execution ---
 
-$LogPath = Join-Path $env:TEMP "app-downloader-installer.log"
+$Folder = "$env:TEMP\downloads"
+$LogPath = Join-Path $env:TEMP "app-installer.log"
 Start-Transcript -Path $LogPath
 
 try
@@ -213,26 +204,15 @@ try
         Write-Host "Failed to parse JSON: $ConfigPath" -ForegroundColor Red
         return
     }
-
-    switch ($Mode)
+    
+    if ($DownloadOnly)
     {
-        "download-only"
-        {
-            Download-Files -Config $ConfigData
-        }
-        "install-only"
-        {
-            Install-Files -Config $ConfigData
-        }
-        "download-install"
-        {
-            Download-Files -Config $ConfigData
-            Install-Files -Config $ConfigData
-        }
-        default
-        {
-            Write-Host "Invalid mode: $Mode" -ForegroundColor Red
-        }
+        Download-Files -Config $ConfigData
+    }
+    else
+    {
+        Download-Files -Config $ConfigData
+        Install-Files -Config $ConfigData
     }
 }
 catch
