@@ -1,0 +1,42 @@
+{
+    "Operations": [
+        {
+            "Path": "HKCU:\\Software\\ExampleApp",
+            "Name": "AlwaysOnTop",
+            "Value": 1,
+            "Type": "DWord",
+            "Action": "Set"
+        },
+        {
+            "Path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection",
+            "Name": "AllowTelemetry",
+            "Value": 0,
+            "Type": "DWord",
+            "Action": "UpdateValue"
+        },
+        {
+            "Path": "HKCU:\\Software\\ExampleApp",
+            "Name": "LicenseKey",
+            "Value": "FREE-TRIAL",
+            "Type": "String",
+            "Action": "Add"
+        },
+        {
+            "Path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment",
+            "Name": "Path",
+            "Value": "C:\\MyTools",
+            "Type": "String",
+            "Action": "Append",
+            "Delimiter": ";"
+        },
+        {
+            "Path": "HKCU:\\Software\\ExampleApp",
+            "Name": "LegacySetting",
+            "Action": "DeleteValue"
+        },
+        {
+            "Path": "HKCU:\\Software\\OldAppToRemove",
+            "Action": "Delete"
+        }
+    ]
+}

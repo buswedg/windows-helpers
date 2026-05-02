@@ -1,7 +1,10 @@
-.idea
+.idea/
+.vscode/
 **/configs/*.json
-**/downloads/
+**/backups/
+**/*.backup.xml
+**/*.log
 **/shortcuts/
+**/downloads/
+**/offline_bundle/
 nvidia-driver-manager/
-winget-installer/offline_bundle/
-winiso-autounattend-injector/iso/

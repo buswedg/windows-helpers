@@ -1,0 +1,16 @@
+{
+    "BackupDir": "C:\\Backups\\Standard",
+    "Sources": [
+        "C:\\DropDrive\\Helpers\\backup"
+    ],
+    "Excludes": [
+        "node_modules/",
+        "env/",
+        "/.git",
+        "bin/",
+        "obj/",
+        "*.tmp",
+        "*.log"
+    ],
+    "ExcludeFile": "configs/standard-excludes.txt"
+}
